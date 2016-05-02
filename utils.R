@@ -1,7 +1,75 @@
+merge_data_with_GC <- function(data,GC){
+  # need to find a faster way to do this.
+  data$name <- paste(as.character(data[,c("Chr")]),as.character(data[,c("Position")]),sep=" ")
+  data <- merge(data,GC,by=c("name","name"))
+  data$Position <- data$Position.x
+  return(data)
+}
+
+get_GC_file <- function(){
+  folder ="/home/users/allstaff/lmcintosh/ITH/SNP_stuff/data/"
+  GC_filenames <- lapply(1:50*50,function(x) paste(folder,"intervals_",as.character(x),".out",sep=""))
+  pGC <- lapply(GC_filenames, read_GC_file) # parallel was slower for loading files.
+
+  for (i in seq_along(pGC)) {
+    setnames(pGC[[i]],c("chr","start","end","pAT","pGC","A","C","G","T","N","O","length"))
+    pGC[[i]]$pos <- i*25+pGC[[i]]$start
+    pGC[[i]]$loc <- as.numeric(pGC[[i]]$chr)+as.numeric(pGC[[i]]$pos)/max(pGC[[i]]$pos)
+  }
+  GC <- pGC[[1]]
+  GC$Position <- GC$start + GC$length/2
+  GC[,"GC50"] <- GC$pGC
+  for(i in 2:50){
+    GC[,paste("GC",as.character(50*i),sep="")] <- pGC[[i]]$pGC
+  }
+  GC$name <- paste(as.character(GC[,c("chr")]),as.character(GC[,c("Position")]),sep=" ")
+  rm(pGC)
+  return(GC)
+}
+
 #ML estimation with a glm
-get_var <- function(major,minor,n,sigma) sum(sigma)/(n*(major+minor)^2) - 2*(sigma[1,2]+sigma[2,2])/(n*minor*(major+minor))+sigma[2,2]/(n*minor^2)
+get_var <- function(major,minor,n,s1,s2,s3) {
+  var <- (s1+2*s2+s3)/(n*(major+minor)^2) - 2*(s2+s3)/(n*minor*(major+minor))+s3/(n*minor^2)
+  return(var)
+}
 
 #get_var(1,2,100,matrix(c(1,0,0,1),nrow=2))+get_var(1,2,100,matrix(c(1,0,0,1),nrow=2))
+
+ML_est_of_dye_CN_rel <- function(segments,max_ord){
+  names <- c("major","minor","total","s1","s2","s3","n")
+  df1 <- segments[1:(nrow(segments)-1),names]
+  df2 <- segments[2:nrow(segments),names]
+  df_low <- df1
+  df_low[which(df1$major+df1$minor > df2$major+df2$minor),] <- df2[which(df1$major+df1$minor > df2$major+df2$minor),]
+  df_high <- df1
+  df_high[which(df1$major+df1$minor < df2$major+df2$minor),] <- df2[which(df1$major+df1$minor < df2$major+df2$minor),]
+
+  CNp <- cbind(df_low,df_high)
+  colnames(CNp) <- c("major1","minor1","total1","s11","s21","s31","n1","major2","minor2","total2","s12","s22","s32","n2")
+
+  r1 <- log((CNp$major1/CNp$major2) * (CNp$total2/CNp$total1))
+  r2 <- log((CNp$minor2/CNp$minor2) * (CNp$total2/CNp$total1))
+  s1 <- get_var(CNp$minor1,CNp$major1,CNp$n1,CNp$s31,CNp$s21,CNp$s11)+
+          get_var(CNp$minor2,CNp$major2,CNp$n2,CNp$s32,CNp$s22,CNp$s12)
+  s2 <-  get_var(CNp$major1,CNp$minor1,CNp$n1,CNp$s11,CNp$s21,CNp$s31)+
+          get_var(CNp$major2,CNp$minor2,CNp$n2,CNp$s12,CNp$s22,CNp$s32)
+
+  X <- sapply((CNp$total2 - CNp$total1), function(x) all.moments(r,order.max=max_ord))
+  alpha <- c(0.4,0.4,0.2)
+  beta <- c(1,rep(0,max_ord-1))
+
+  theta <- 1/(max(cbind(r1,r2)) - min(cbind(r1,r2)))
+  pA <- dnorm(x=r1,mean=X%*%beta,s1)/theta
+  pB <- dnorm(x=r2,mean=X%*%beta,s2)/theta
+  pC <- 1/theta^2
+  psum <- alpha[1]*pA + alpha[2]*pB + alpha[3]*pC
+  pA <- pA/psum
+  pB <- pB/psum
+  pC <- pC/psum
+
+  beta <-
+}
+
 
 
 combine_het_and_hom_info <- function(segments){
@@ -139,7 +207,7 @@ do_some_seg <- function(data,round,seg_name="CT"){
   #report(fit, sampleName=paste(filename,"_PSCBS_report",Sys.time(),sep=""), studyName="PSCBS-Ex", verbose=FALSE)
 
   ##### END SAVE PSCCBS OUTPUT #####
-  return(list(segs = segments,fit = fit,data=data))
+  return(list(segments = segments,fit = fit,data=data))
 }
 
 
@@ -235,6 +303,15 @@ get_new_snp_estimates <- function(gam,data,new_snp_name,old_segment_name){
     data <- data[-gam$na.action,]
   }
   data[,new_snp_name] <- (gam$residuals+1)*data[,old_segment_name]
+  data[,new_snp_name] <- data[,new_snp_name]/median(data[,new_snp_name])*2
+  return(data)
+}
+
+get_new_snp_estimates2 <- function(gam,data,new_snp_name,old_segment_name){
+  if(!is.null(gam$na.action)){
+    data <- data[-gam$na.action,]
+  }
+  data[,new_snp_name] <- gam$residuals+data[,old_segment_name]
   data[,new_snp_name] <- data[,new_snp_name]/median(data[,new_snp_name])*2
   return(data)
 }
@@ -2364,17 +2441,10 @@ reinfer_segments <- function(data,segments){
   return(segments)
 }
 
-
-
-# functions for segmentation
-# can estimtate thresholds empirically instead:
-rename_raw_columns <- function(x){
+preprocess_raw_data <- function(x){
   colnames(x) <- gsub(' ', '.', colnames(x))
   colnames(x) <- gsub('-', '.', colnames(x))
-  return(x)
-}
 
-preprocess_raw_data <- function(x){
   # force the type that we want:
   x$Chr <- as.integer(as.character(x$Chr)) # I don't think that we want this, come back to it later.
   x$Position <- as.integer(as.character(x$Position))

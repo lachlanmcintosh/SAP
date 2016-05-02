@@ -4,22 +4,25 @@
 # Author: Lachlan McIntosh
 rm(list=ls())
 library(ggplot2)
+library(PSCBS)
+library(data.table)
+library(mgcv)
 
 #### unpaired test dataset: SAMPLE 13 ####
 args=(commandArgs(TRUE))
-sample <-  as.character(args[1])
-#sample <- 9
+#sample <-  as.character(args[1])
+sample <- 9
 PARENT_FOLDER = paste("/home/users/allstaff/lmcintosh/P2_LEON/ILO2.58-8359/","ascat_",as.character(sample),"/",sep="")
 filename = paste(PARENT_FOLDER,"/raw_data.txt",sep="")
 # load functions
-source(paste(getwd(),"utils.R"))
+source(paste(getwd(),"/utils.R",sep=""))
+#source("/wehisan/home/allstaff/l/lmcintosh/SAP/utils.R")
 
-library(data.table)
 data <- read_raw_illumina_file(filename)
-data <- rename_raw_columns(data)
 data <- preprocess_raw_data(data)
-library(PSCBS)
-List[segments,fit,data] <- do_some_seg(data,0)
+result <- do_some_seg(data,0)
+data <- result$data
+segments <- result$segments
 data <-  reformat(data,segments)
 
 #### find het SNPs if the SNPs are not annotated ####
@@ -27,42 +30,22 @@ data <-  reformat(data,segments)
 # find_all_het_SNPs(data)
 #### find het SNPs if the SNPs are not annotated ####
 data <-  renormalise(data,0)
+GC <- get_GC_file()
+data <- merge_data_with_GC(data,GC)
 
-#library(mgcv)
-folder ="/home/users/allstaff/lmcintosh/ITH/SNP_stuff/data/"
-GC_filenames <- lapply(1:50*50,function(x) paste(folder,"intervals_",as.character(x),".out",sep=""))
-pGC <- lapply(GC_filenames, read_GC_file) # parallel was slower for loading files.
-
-for (i in seq_along(pGC)) {
-  setnames(pGC[[i]],c("chr","start","end","pAT","pGC","A","C","G","T","N","O","length"))
-  pGC[[i]]$pos <- i*25+pGC[[i]]$start
-  pGC[[i]]$loc <- as.numeric(pGC[[i]]$chr)+as.numeric(pGC[[i]]$pos)/max(pGC[[i]]$pos)
-}
-GC <- pGC[[1]]
-GC$Position <- GC$start + GC$length/2
-GC[,"GC50"] <- GC$pGC
-for(i in 2:50){
-  GC[,paste("GC",as.character(50*i),sep="")] <- pGC[[i]]$pGC
-}
-GC$name <- paste(as.character(GC[,c("chr")]),as.character(GC[,c("Position")]),sep=" ")
-rm(pGC)
-# need to find a faster way to do this.
-data$name <- paste(as.character(data[,c("Chr")]),as.character(data[,c("Position")]),sep=" ")
-data <- merge(data,GC,by=c("name","name"))
-data$Position <- data$Position.x
-
-
-library(mgcv)
-temp_data <- data
-data <- temp_data
+# temp_data <- data
+# data <- temp_data
 segr <- 1
 pr <- 0
 old_segments <- list(segments)
-while(segr < 5){ # could potentially do this until convergence.... but might just shrink all to zero.
+while(segr < 4){ # could potentially do this until convergence.... but might just shrink all to zero.
   while(pr < 4*segr-1){
-    old_segment_ids <- get_segment_ids(segments)
     data <-  renormalise(data,pr)
-    #gam <- gam(R ~ 0+ reddyeAT_spec + greendyeAT_spec + reddyeGC_spec + greeendyeGC_spec + s(GC50)+s(GC150)+s(GC500)+s(GC2500),data=data)
+    data$weights <- segments[data$segment,"tcnNbrOfSNPs"]^(0.5)
+    data$weights <- data$weights/mean(data$weights,na.rm=TRUE)
+    data$CNseg <- data[,paste("segmentCT_pre",as.character(pr),sep="")]
+    gam <- gam(R ~ 0+ reddyeAT_spec + greendyeAT_spec + reddyeGC_spec + greeendyeGC_spec + s(GC50)+s(GC150)+s(GC500)+s(GC2500),data=data)
+    #gam <- bam(CNseg ~ 0 + s(reddyeAT) + s(greendyeAT) + s(reddyeGC) + s(greeendyeGC) + ti(CNsnp,GC50) + ti(CNsnp,GC150) + ti(CNsnp,GC500) + ti(CNsnp,GC2500), weights=data$weights, data=data)
     gam <- gam(R ~ 0+ reddyeAT + greendyeAT + reddyeGC + greeendyeGC + s(GC50)+s(GC150)+s(GC500)+s(GC2500),data=data)
     pr <- pr + 1
     name <- as.character(pr)
@@ -71,24 +54,26 @@ while(segr < 5){ # could potentially do this until convergence.... but might jus
     data <- get_new_snp_estimates(gam=gam,data=data,
               new_snp_name = paste("CT_pre",name,sep=""),
               old_segment_name = paste("segmentCT_pre",as.character(pr-1),sep=""))
+    # data <- get_new_snp_estimates2(gam=gam,data=data,
+    #           new_snp_name = paste("CT_pre",name,sep=""),
+    #           old_segment_name = paste("segmentCT_pre",as.character(pr-1),sep=""))
     segments <- get_new_seg_estimates(data=data,segments=segments,
                   new_snp_name = paste("CT_pre",name,sep=""),
                   new_seg_name = paste("segmentCT_pre",name,sep=""))
     data <- put_seg_estimates_into_data_array(data=data,segments=segments,
               segment_name = paste("segmentCT_pre",name,sep=""),
               new_snp_name = paste("segmentCT_pre",name,sep=""))
-    }
-    segr <- segr+1
-    if(segr <5){
-      old_segments[[segr]] <- segments
-      pr <- pr + 1
-      result <- do_some_seg(data,pr,paste("CT_pre",as.character(pr-1),sep=""))
-      segments <- result$segs
-      fit <- result$fit
-      data <- result$data
-    }
   }
-
+  segr <- segr+1
+  if(segr <5){
+    old_segments[[segr]] <- segments
+    pr <- pr + 1
+    result <- do_some_seg(data,pr,paste("CT_pre",as.character(pr-1),sep=""))
+    segments <- result$segs
+    fit <- result$fit
+    data <- result$data
+  }
+}
            # > get_var(1,2,100,matrix(c(1,0,0,1),nrow=2))
            # Error: could not find function "get_var"
            # > get_var <- function(major,minor,n,sigma) sum(sigma)/(n*(major+minor)^2) - 2*(sigma[1,2]+sigma[2,2])/(n*minor*(major+minor))+sigma[2,2]/(n*minor^2)
@@ -119,6 +104,10 @@ get_TCN_track <- function(mat,seg_est_name){
     facet_grid(.~chromosome,scales = "free_x", space = "free")
   return(g)
 }
+library(gridExtra)
+g1 <-get_TCN_track(segments,"segmentCT_pre0")+ylim(0,4)
+g2 <-get_TCN_track(segments,"segmentCT_pre1")+ylim(0,4)
+grid.arrange(g1,g2)
 
 g1 <-get_TCN_track(old_segments[[3]],"segmentCT_pre0")+ylim(0,4)
 g2 <-get_TCN_track(old_segments[[3]],"segmentCT_pre1")+ylim(0,4)
