@@ -1,3 +1,70 @@
+cluster_ACN <- function(dat,iterations,local_adj_thresh,global_adj_thresh,p_close_local,p_close_global,TCN,TCN_se){
+  # let the CN estimates converge locally if below the specified local threshold
+  dat[,"TCN"] <- dat[,TCN] #segmentCN_pre12
+  dat[,"TCN_se"] <- dat[,TCN_se] #segmentCN_pre12
+  dat[,"length"] <- dat[,"tcnNbrOfLoci"]
+  dat <- dat[complete.cases(dat$TCN)&complete.cases(dat$TCN_se),]
+  for (i in 2:nrow(dat)){
+    if (abs(dat[i,"TCN"]-dat[i-1,"TCN"])<local_adj_thresh & dat[i-1,"chromosome"] == dat[i,"chromosome"]){
+      t = (dat[i,"TCN"]-dat[i-1,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^0.5
+      df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^2)^2/
+              ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
+               (dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^2*(dat[i,"length"]-1))
+      p <- 2*pt(-abs(t),df=df)
+      p <- max(p,p_close_local)
+
+      # rather than use the t-distribution here, assign probabilities based upon the ECDF of the differences between segments. Augment this ECDF with unobserved true changes.
+
+
+      mean_TCN <- (dat[i,"TCN"]*dat[i,"length"]+dat[i-1,"TCN"]*dat[i-1,"length"])/(dat[i,"length"]+dat[i-1,"length"])
+      dat[i-1,"TCN"] <- mean_TCN*p + dat[i-1,"TCN"]*(1-p)
+      dat[i,"TCN"] <- mean_TCN*p + dat[i,"TCN"]*(1-p)
+    }
+  }
+
+  for(i in 3:nrow(dat)){
+    if (abs(dat[i,"TCN"]-dat[i-2,"TCN"])<local_adj_thresh & dat[i-2,"chromosome"] == dat[i,"chromosome"]){
+
+      t = (dat[i,"TCN"]-dat[i-2,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^0.5
+      df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2)^2/
+        ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
+           (dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2*(dat[i,"length"]-1))
+      p <- 2*pt(-abs(t),df=df)
+
+      mean_TCN <- (dat[i,"TCN"]*dat[i,"length"]+dat[i-2,"TCN"]*dat[i-2,"length"])/(dat[i,"length"]+dat[i-2,"length"])
+
+      t = (dat[i,"TCN"]-dat[i-2,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^0.5
+      df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2)^2/
+        ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
+           (dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2*(dat[i,"length"]-1))
+      p <- 2*pt(-abs(t),df=df)
+      p <- max(p,p_close_local)
+
+      dat[i-2,"TCN"] <- mean_TCN*p + dat[i-2,"TCN"]*(1-p)
+      dat[i,"TCN"] <- mean_TCN*p + dat[i,"TCN"]*(1-p)    }
+  }
+
+  hc <- hclust(dist(dat$TCN),method="complete")                # apply hirarchical clustering
+  #plot(hc)
+  #rect.hclust(hc, h=global_adj_thresh, border="red")
+  dat$memb <- cutree(hc, h=global_adj_thresh)
+
+  for(i in 1:max(dat$memb)){
+    temp <- dat[which(dat$memb == i),]
+    mean_TCN <- sum(temp$TCN*temp$length)/sum(temp$length)
+    dat[which(dat$memb == i),"TCN"] <- p_close_global*mean_TCN + (1-p_close_global)*dat[which(dat$memb == i),"TCN"]
+  }
+
+  if(iterations > 1){
+    iterations <- iterations -1
+    dat[,TCN] <- dat$TCN
+    return(cluster_ACN(dat,iterations,local_adj_thresh,global_adj_thresh,p_close_local,p_close_global,TCN))
+  } else if(iterations == 1){
+    dat[,TCN] <- dat$TCN
+    return(dat)
+  }
+}
+
 merge_data_with_GC <- function(data,GC){
   # need to find a faster way to do this.
   data$name <- paste(as.character(data[,c("Chr")]),as.character(data[,c("Position")]),sep=" ")
@@ -48,9 +115,12 @@ ML_est_of_dye_CN_rel <- function(segments,max_ord){
   colnames(CNp) <- c("major1","minor1","total1","s11","s21","s31","n1","major2","minor2","total2","s12","s22","s32","n2")
 
   r1 <- log((CNp$major1/CNp$major2) * (CNp$total2/CNp$total1))
+
   r2 <- log((CNp$minor2/CNp$minor2) * (CNp$total2/CNp$total1))
+
   s1 <- get_var(CNp$minor1,CNp$major1,CNp$n1,CNp$s31,CNp$s21,CNp$s11)+
           get_var(CNp$minor2,CNp$major2,CNp$n2,CNp$s32,CNp$s22,CNp$s12)
+
   s2 <-  get_var(CNp$major1,CNp$minor1,CNp$n1,CNp$s11,CNp$s21,CNp$s31)+
           get_var(CNp$major2,CNp$minor2,CNp$n2,CNp$s12,CNp$s22,CNp$s32)
 
@@ -59,15 +129,14 @@ ML_est_of_dye_CN_rel <- function(segments,max_ord){
   beta <- c(1,rep(0,max_ord-1))
 
   theta <- 1/(max(cbind(r1,r2)) - min(cbind(r1,r2)))
-  pA <- dnorm(x=r1,mean=X%*%beta,s1)/theta
-  pB <- dnorm(x=r2,mean=X%*%beta,s2)/theta
-  pC <- 1/theta^2
-  psum <- alpha[1]*pA + alpha[2]*pB + alpha[3]*pC
-  pA <- pA/psum
-  pB <- pB/psum
-  pC <- pC/psum
 
-  beta <-
+  for(i in 1:100){
+    density <- cbind(dnorm(x=r1,mean=X%*%beta,s1)/theta, dnorm(x=r2,mean=X%*%beta,s2)/theta, 1/theta^2)
+    p <- density%*%t(alpha)/sum(density%*%t(alpha))
+    alpha <- apply(p,1,sum)/nrow(p)
+    beta <- solve(((diag(p[1,])+diag(p[2,]))%*%t(X)%*%X)) %*% (diag(p[1,]) %*% t(X) %*% r1 + diag(p[2,]) %*% t(X) %*% r2)
+  }
+  return(beta = beta, alpha = alpha)
 }
 
 
@@ -164,8 +233,8 @@ do_some_seg <- function(data,round,seg_name="CT"){
   data$segment <- cut(x=as.numeric(data$location),breaks=as.numeric(segments$locationstart),labels=FALSE)
   data[,paste("resegmentCT_PSCBS",as.character(round),sep="")] <- segments[data$segment,"tcnMean"]
 
-  segments[,paste("segmentCT_pre",round,sep="")] <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),paste("resegmentCT_PSCBS",as.character(round),sep="")],na.rm=TRUE))
-  data[,paste("segmentCT_pre",round,sep="")] <- segments[data$segment,paste("segmentCT_pre",round,sep="")]
+  segments[,paste("segmentCN_pre",round,sep="")] <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),paste("resegmentCT_PSCBS",as.character(round),sep="")],na.rm=TRUE))
+  data[,paste("segmentCN_pre",round,sep="")] <- segments[data$segment,paste("segmentCN_pre",round,sep="")]
 
   # make some plots:
   ##### END PSCBS MAIN BLOCK #####
@@ -223,73 +292,135 @@ get_segment_ids <- function(segments){
   return(segments[,c("chromosome","tcnStart","tcnEnd")])
 }
 
-renormalise <- function(data,round){
-  # should renormalise the homs and the hets seperately.
-  #data$CNsnp <- data$CNsnp/mean(data$CNsnp)
-  if(round == 0){
-    homs <- data$Allele1...Design == data$Allele1...Design
-    med_homs <- median(data[which(homs),"reddye"]+data[which(homs),"greendye"],na.rm=TRUE)/2
-    med_hets <- median(data[which(!homs),"reddye"]+data[which(!homs),"greendye"],na.rm=TRUE)/2
-    data[which(homs),"reddye"] <- data[which(homs),"reddye"]/median(data[which(homs),"reddye"],na.rm=TRUE)*med_homs
-    data[which(homs),"greendye"] <- data[which(homs),"greendye"]/median(data[which(homs),"greendye"],na.rm=TRUE)*med_homs
-    data[which(!homs),"reddye"] <- data[which(!homs),"reddye"]/median(data[which(!homs),"reddye"],na.rm=TRUE)*med_hets
-    data[which(!homs),"greendye"] <- data[which(!homs),"greendye"]/median(data[which(!homs),"greendye"],na.rm=TRUE)*med_hets
-    data$CNsnp <- data$reddye+data$greendye
+renormalise <- function(data,segments,pr){
+  # start with the original data:
+  data$CNsnp <- data$CT
+  data$CNseg <- data[,paste("segmentCN_pre",as.character(pr-1),sep="")]
 
-    data$reddyeAT <- data$reddye*(as.numeric(data$AT1))
-    data$reddyeGC <- data$reddye*(1-as.numeric(data$AT1))
-    data$greendyeAT <- data$greendye*(as.numeric(data$AT2))
-    data$greeendyeGC <- data$greendye*(1-as.numeric(data$AT2))
-  }
-  data$R <- data$CNsnp/data[,paste("segmentCT_pre",as.character(round),sep='')]- median(data$CNsnp/data[,paste("segmentCT_pre",as.character(round),sep='')],na.rm=TRUE)
-  data[,"reddyeAT_spec"] <- data$reddye*(as.numeric(data$AT1))/data[,paste("segmentCT_pre",as.character(round),sep='')]
-  data[,"reddyeGC_spec"] <- data$reddye*(1-as.numeric(data$AT1))/data[,paste("segmentCT_pre",as.character(round),sep='')]
-  data[,"greendyeAT_spec"] <- data$greendye*(as.numeric(data$AT2))/data[,paste("segmentCT_pre",as.character(round),sep='')]
-  data[,"greeendyeGC_spec"] <- data$greendye*(1-as.numeric(data$AT2))/data[,paste("segmentCT_pre",as.character(round),sep='')]
-  print("done")
-  return(data)
+  data$reddye <- data$CNsnp*data$B.Allele.Freq
+  data$greendye <- data$CNsnp*(1-data$B.Allele.Freq)
+  data$homs <- data$Allele1...Design == data$Allele2...Design
+
+  # calculate relationships to segment value and their inverses:
+  gred <- lm(formula=reddye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  ggreen <- lm(formula= greendye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye < data$greendye),])
+  gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),])
+
+  # plot(gred)
+  # plot(ggreen)
+  # plot(gredinv)
+  # plot(ggreeninv)
+  summary(gred)
+  summary(ggreen)
+  summary(gredinv)
+  summary(ggreeninv)
+
+  new_green = data.frame(data$greendye)
+  colnames(new_green) <- "greendye"
+  new_green <- predict(ggreeninv,newdata=new_green)
+  new_green <- data.frame(new_green)
+  colnames(new_green) <- "CNseg"
+  data$newgreen <- (data$greendye+predict(gred,newdata=new_green))/2
+
+  # it looks like the gams are overfitting and just simply assigning whatever fucking value that they want.
+  # use polynomials instead.
+  # maybe only use odd powers to ensure the monotonicty idea.
+
+  new_red = data.frame(data$reddye)
+  colnames(new_red) <- "reddye"
+  new_red <- predict(gredinv,newdata=new_red)
+  new_red <- data.frame(new_red)
+  colnames(new_red) <- "CNseg"
+  data$newred <- (data$reddye+predict(ggreen,newdata=new_red))/2
+
+  # data$newred <- sapply(data$newred,function(x) max(0,x))
+  # data$newgreen <- sapply(data$newgreen,function(x) max(0,x))
+
+  # sd(data$newred,na.rm=TRUE)
+  # sd(data$newgreen,na.rm=TRUE)
+  # sd(data$reddye,na.rm=TRUE)
+  # sd(data$greendye,na.rm=TRUE)
+  # mean(data$newred,na.rm=TRUE)
+  # mean(data$newgreen,na.rm=TRUE)
+  # mean(data$reddye,na.rm=TRUE)
+  # mean(data$greendye,na.rm=TRUE)
+
+  data$newbaf <- data$newgreen/(data$newred+data$newgreen)
+  sd(data$B.Allele.Freq,na.rm=TRUE)
+  sd(data$newbaf,na.rm=TRUE)
+  ggplot()+geom_histogram(aes(data[which(data$homs),"newbaf"]),binwidth=0.01)
+  ggplot()+geom_histogram(aes(data[which(!data$homs),"newbaf"]),binwidth=0.01)
+  ggplot()+geom_histogram(aes(data[which(!data$homs),"B.Allele.Freq"]),binwidth=0.01)
+
+  # median(data[which(data$homs & data$newred < data$newgreen),"newred"])
+  # median(data[which(data$homs & data$newred > data$newgreen),"newgreen"])
+
+  # ok now apply the tumor boost correction:
+  med_baf <- median(data[which(!data$homs),"newbaf"])
+
+  data$newbaf2 <- data$newbaf
+  data[which(data$newbaf < med_baf),"newbaf2"] <- 0.5*data[which(data$newbaf < med_baf),"newbaf"]/med_baf
+  data[which(data$newbaf > med_baf),"newbaf2"] <- 1-0.5*(1-data[which(data$newbaf > med_baf),"newbaf"])/(1-med_baf)
+
+  data$CNsnp <- data$newgreen +data$newred
+  data$reddye <- data$CNsnp*data$newbaf2
+  data$greendye <- data$CNsnp*(1-data$newbaf2)
+  data$baf <- data$newbaf2
+
+  # ggplot()+geom_histogram(aes(data[which(data$homs),"newbaf2"]),binwidth=0.01)
+  # ggplot()+geom_histogram(aes(data[which(!data$homs),"newbaf2"]),binwidth=0.01)
+
+  # should now do correction of homs to non homs in total copy number in the same way we just did red to non red!
+  ghom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(data$homs),])
+  gnonhom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(!data$homs),])
+  ghominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(data$homs),])
+  gnonhominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(!data$homs),])
+
+  # summary(ghom)
+  # summary(gnonhom)
+  # summary(ghominv)
+  data$CNsnp2 <- data$CNsnp
+  new_hom = data.frame(data[which(data$homs),"CNsnp"])
+  colnames(new_hom) <- "CNsnp"
+  new_hom <- predict(ghominv,newdata=new_hom)
+  new_hom <- data.frame(new_hom)
+  colnames(new_hom) <- "CNseg"
+  data[which(data$homs),"CNsnp2"] <- (data[which(data$homs),"CNsnp"] + predict(gnonhom,newdata=new_hom))/2
+
+  new_nonhom = data.frame(data[which(!data$homs),"CNsnp"])
+  colnames(new_nonhom) <- "CNsnp"
+  new_nonhom <- predict(gnonhominv,newdata=new_nonhom)
+  new_nonhom <- data.frame(new_nonhom)
+  colnames(new_nonhom) <- "CNseg"
+  data[which(!data$homs),"CNsnp2"] <- (data[which(!data$homs),"CNsnp"] + predict(ghom,newdata=new_nonhom))/2
+  data$CNsnp <- data$CNsnp2
+
+  data$CNsnp <- data$CNsnp*2/median(data$CNsnp,na.rm=TRUE)
+
+  segments <- get_new_seg_estimates(data=data,segments=segments,
+                                    new_snp_name = "CNsnp",
+                                    new_seg_name = paste("segmentCN_pre_nogam",as.character(pr),sep=""))
+  data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+                                            segment_name = paste("segmentCN_pre_nogam",as.character(pr),sep=""),
+                                            new_snp_name = paste("segmentCN_pre_nogam",as.character(pr),sep=""))
+
+
+  data$CNseg <- data[,paste("segmentCN_pre_nogam",as.character(pr),sep="")]
+  return(list(data=data,segments=segments))
 }
 
 reformat <- function(data,segments){
   data = data[which(data$Chr != 0),]
 
-  data$M <- data$CT * data$B.Allele.Freq
-  data$m <- data$CT * (1-data$B.Allele.Freq)
-
-  #### find het SNPs if the SNPs are annotated by their expected value ####
-  data$ishet <- data$Allele1...AB != data$Allele2...AB
   #Find which segment each thing belongs to
   max_pos = max(as.numeric(data$Position))+1
   data$location <- as.numeric(data$Chr)+as.numeric(data$Position)/max_pos
   segments$locationstart <- as.numeric(segments$chromosome)+as.numeric(segments$tcnStart)/max_pos
-  #data$segment <- findInterval(data$location, segments$locationstart)
 
   data$segment <- cut(x=as.numeric(data$location),breaks=as.numeric(segments$locationstart),labels=FALSE)
   data$segmentCT_PSCBS <- segments[data$segment,"tcnMean"]
 
-  data$reddye <- data$CT*data$B.Allele.Freq
-  data$greendye <- data$CT*(1-data$B.Allele.Freq)
-  data$AT1 <- as.factor(as.numeric(data$Allele1...Design == "A" | data$Allele1...Design == "T"))
-  data$AT2 <- as.factor(as.numeric(data$Allele2...Design == "A" | data$Allele2...Design == "T"))
-
-  #might want to check that the segmentCN is indeed the mean of the constituent probes.
-  segments$Log.R.Ratio <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),"Log.R.Ratio"],na.rm=TRUE))
-  segments$TCN <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),"CT"],na.rm=TRUE))
-  data$segmentCT <- data$segmentCT2 <- segments[data$segment,"TCN"]
-  data$segmentLog.R.Ratio <- segments[data$segment,"Log.R.Ratio"]
-
-
-  data$LOG_RATIO <- data$Log.R.Ratio/data$segmentLog.R.Ratio
-  data$LOG_DIFF <- data$Log.R.Ratio-data$segmentLog.R.Ratio
-  data$TCN_RATIO <- data$CT/data$segmentCT
-  data$TCN_DIFF <- data$CT-data$segmentCT
-
-  data$reddyeAT <- data$reddye*(as.numeric(data$AT1))
-  data$reddyeGC <- data$reddye*(1-as.numeric(data$AT1))
-  data$greendyeAT <- data$greendye*(as.numeric(data$AT2))
-  data$greeendyeGC <- data$greendye*(1-as.numeric(data$AT2))
-
-  print("done")
   return(data)
 }
 
@@ -303,7 +434,16 @@ get_new_snp_estimates <- function(gam,data,new_snp_name,old_segment_name){
     data <- data[-gam$na.action,]
   }
   data[,new_snp_name] <- (gam$residuals+1)*data[,old_segment_name]
-  data[,new_snp_name] <- data[,new_snp_name]/median(data[,new_snp_name])*2
+  data[,new_snp_name] <- data[,new_snp_name]/median(data[,new_snp_name],na.rm=TRUE)*2
+  return(data)
+}
+
+get_new_snp_estimates4 <- function(gam,data,new_snp_name,old_seg_name){
+  if(!is.null(gam$na.action)){
+    data <- data[-gam$na.action,]
+  }
+  data[,new_snp_name] <- gam$residuals-gam$fitted.values
+  data[,new_snp_name] <- data[,new_snp_name]/median(data[,new_snp_name],na.rm=TRUE)*2
   return(data)
 }
 
@@ -311,13 +451,14 @@ get_new_snp_estimates2 <- function(gam,data,new_snp_name,old_segment_name){
   if(!is.null(gam$na.action)){
     data <- data[-gam$na.action,]
   }
-  data[,new_snp_name] <- gam$residuals+data[,old_segment_name]
-  data[,new_snp_name] <- data[,new_snp_name]/median(data[,new_snp_name])*2
+  data[,new_snp_name] <- (gam$residuals-gam$fitted.values)*data[,old_segment_name]
+  data[,new_snp_name] <- data[,new_snp_name]/median(data[,new_snp_name],na.rm=TRUE)*2
   return(data)
 }
 
 get_new_seg_estimates <- function(data,segments,new_snp_name,new_seg_name){
   segments[,new_seg_name] <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),new_snp_name],na.rm=TRUE))
+  segments[,paste(new_seg_name,"_stderr",sep="")] <- sapply(1:nrow(segments),function(x) sd(data[which(data$segment == x),new_snp_name],na.rm=TRUE))
   return(segments)
 }
 
@@ -399,8 +540,8 @@ relabel_segments <- function(data,segments){
 }
 
 normalise_data <- function(data){
-  data$M <- data$B.Allele.Freq*data$CT_pre3
-  data$m <- (1-data$B.Allele.Freq)*data$CT_pre3
+  data$M <- data$B.Allele.Freq*data$CN_pre3
+  data$m <- (1-data$B.Allele.Freq)*data$CN_pre3
   for(i in sort(unique(data$segment))){
     # run the em algorithm only on the het snps!
     seg_data = (data$segment2 == i)
