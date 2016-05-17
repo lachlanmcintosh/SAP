@@ -1,66 +1,221 @@
+renormalise2 <- function(data,segments,pr){
+  # start with the original data:
+  data$CNsnp <- data$CT
+  data$CNseg <- data[,paste("segmentCN_pre",as.character(pr-1),sep="")]
+
+  data$reddye <- data$CNsnp*data$B.Allele.Freq
+  data$greendye <- data$CNsnp*(1-data$B.Allele.Freq)
+  data$homs <- data$Allele1...Design == data$Allele2...Design
+
+  # # calculate relationships to segment value and their inverses:
+  # gred <- lm(formula=reddye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreen <- lm(formula= greendye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye < data$greendye),])
+  # gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),])
+
+  # gred <- lm(formula=reddye~0+CNseg,data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreen <- lm(formula= greendye~0+CNseg,data=data[which(data$homs & data$reddye < data$greendye),])
+  # gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3)+I(reddye^5),data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3)+I(reddye^5),,data=data[which(data$homs & data$reddye < data$greendye),])
+
+  # data$type <- data$reddye < data$greendye
+
+  gredinv <- gam(formula=CNseg~0+s(reddye),data=data[which(data$homs & data$reddye > data$greendye),])
+  ggreeninv <- gam(formula=CNseg~0+s(greendye),data=data[which(data$homs & data$reddye < data$greendye),])
+
+  #head(data[which(data$homs & data$reddye < data$greendye),c("reddye","greendye")])
+
+  # g <- gam(CNseg ~ 0+s(CNsnp,by = as.factor(type)),data=data[which(data$homs),])
+  #fake = data.frame(type=c(1,0,1,0,1,0,1,0),CNsnp=c(0,0,1,1,2,2,3,3))
+  # new_green2 <- predict(ggreeninv,newdata=new_green)
+  # new_green2 <- data.frame(new_green2)
+  # colnames(new_green2) <- "CNseg"
+  # data$newgreen <- (data$greendye+predict(gred,newdata=new_green2))/2
+  predict(g,newdata=fake)# + data$greendye
+
+  plot(g)
+  vis.gam(g)
+  summary(g)
+
+  plot(gredinv)
+  plot(ggreeninv)
+
+
+  # plot(gred)
+  # plot(ggreen)
+  # plot(gredinv)
+  # plot(ggreeninv)
+  # summary(gred)
+  # summary(ggreen)
+  summary(gredinv)
+  summary(ggreeninv)
+
+  new_green = data.frame(data$greendye)
+  colnames(new_green) <- "greendye"
+  # new_green2 <- predict(ggreeninv,newdata=new_green)
+  # new_green2 <- data.frame(new_green2)
+  # colnames(new_green2) <- "CNseg"
+  # data$newgreen <- (data$greendye+predict(gred,newdata=new_green2))/2
+  data$newgreen <- predict(ggreeninv,newdata=new_green)# + data$greendye
+
+  # it looks like the gams are overfitting and just simply assigning whatever fucking value that they want.
+  # use polynomials instead.
+  # maybe only use odd powers to ensure the monotonicty idea.
+
+  new_red = data.frame(data$reddye)
+  colnames(new_red) <- "reddye"
+  # new_red2 <- predict(gredinv,newdata=new_red)
+  # new_red2 <- data.frame(new_red2)
+  # colnames(new_red2) <- "CNseg"
+  data$newred <- predict(gredinv,newdata=new_red)# + data$reddye
+  #head(data[,c("reddye","greendye","newred","newgreen")])
+
+
+  data$newbaf <- data$newgreen/(data$newred+data$newgreen)
+
+  #ggplot(data)+geom_segment(aes(x=reddye,y=greendye,xend=newred,yend=newgreen),alpha=0.01)+xlim(0,5)+ylim(0,5)
+
+
+  # gam <- gam(I(reddye-greendye) ~ 0+s(CNseg) + s(GC150) + s(GC500) + s(GC2500) , data=data)
+
+  #ggplot(data)+geom_segment(aes(x=reddye,y=greendye,xend=new_red2,yend=new_green2),alpha=0.01)+xlim(0,5)+ylim(0,5)
+
+  # sd(data$B.Allele.Freq,na.rm=TRUE)
+  # sd(data$newbaf,na.rm=TRUE)
+  # ggplot()+geom_histogram(aes(data[which(data$homs),"newbaf"]),binwidth=0.01)
+  # ggplot()+geom_histogram(aes(data[which(!data$homs),"newbaf"]),binwidth=0.01)
+  # ggplot()+geom_histogram(aes(data[which(!data$homs),"B.Allele.Freq"]),binwidth=0.01)
+
+  # median(data[which(data$homs & data$newred < data$newgreen),"newred"])
+  # median(data[which(data$homs & data$newred > data$newgreen),"newgreen"])
+
+  # ok now apply the tumor boost correction:
+  med_baf <- median(data[which(!data$homs),"newbaf"])
+
+  data$newbaf2 <- data$newbaf
+  data[which(data$newbaf < med_baf),"newbaf2"] <- 0.5*data[which(data$newbaf < med_baf),"newbaf"]/med_baf
+  data[which(data$newbaf > med_baf),"newbaf2"] <- 1-0.5*(1-data[which(data$newbaf > med_baf),"newbaf"])/(1-med_baf)
+
+  data$CNsnp <- data$newgreen +data$newred
+  data$reddye3 <- data$CNsnp*(1-data$newbaf2)
+  data$greendye3 <- data$CNsnp*data$newbaf2
+  data$baf <- data$newbaf2
+  #ggplot(data)+geom_segment(aes(x=reddye,y=greendye,xend=reddye3,yend=greendye3),alpha=0.01)+xlim(0,5)+ylim(0,5)
+
+  data$reddye <- data$reddye3
+  data$greendye <- data$greendye3
+
+  # ggplot()+geom_histogram(aes(data[which(data$homs),"newbaf2"]),binwidth=0.01)
+  # ggplot()+geom_histogram(aes(data[which(!data$homs),"newbaf2"]),binwidth=0.01)
+
+  # should now do correction of homs to non homs in total copy number in the same way we just did red to non red!
+  # ghom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(data$homs),])
+  # gnonhom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(!data$homs),])
+  ghominv <- lm(CNseg~0+CNsnp,data=data[which(data$homs),])
+  gnonhominv <- lm(CNseg~0+CNsnp,data=data[which(!data$homs),])
+
+  # summary(ghom)
+  # summary(gnonhom)
+  summary(ghominv)
+  summary(gnonhominv)
+
+
+  data$CNsnp2 <- data$CNsnp
+  new_hom = data.frame(data[which(data$homs),"CNsnp"])
+  colnames(new_hom) <- "CNsnp"
+  # new_hom2 <- predict(ghominv,newdata=new_hom)
+  # new_hom2 <- data.frame(new_hom2)
+  # colnames(new_hom2) <- "CNseg"
+  data[which(data$homs),"CNsnp2"] <- predict(ghominv,newdata=new_hom) #(data[which(data$homs),"CNsnp"] + predict(gnonhom,newdata=new_hom2))/2
+
+  new_nonhom = data.frame(data[which(!data$homs),"CNsnp"])
+  colnames(new_nonhom) <- "CNsnp"
+  # new_nonhom2 <- predict(gnonhominv,newdata=new_nonhom)
+  # new_nonhom2 <- data.frame(new_nonhom2)
+  # colnames(new_nonhom2) <- "CNseg"
+  data[which(!data$homs),"CNsnp2"] <- predict(gnonhominv,newdata=new_nonhom) #(data[which(!data$homs),"CNsnp"] + predict(ghom,newdata=new_nonhom2))/2
+  data$CNsnp <- data$CNsnp2
+
+  data$CNsnp <- data$CNsnp*2/median(data$CNsnp,na.rm=TRUE)
+
+  segments <- get_new_seg_estimates(data=data,segments=segments,
+                                    new_snp_name = "CNsnp",
+                                    new_seg_name = paste("segmentCN_pre_nogam",as.character(pr),sep=""))
+  data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+                                            segment_name = paste("segmentCN_pre_nogam",as.character(pr),sep=""),
+                                            new_snp_name = paste("segmentCN_pre_nogam",as.character(pr),sep=""))
+
+
+  data$CNseg <- data[,paste("segmentCN_pre_nogam",as.character(pr),sep="")]
+  return(list(data=data,segments=segments))
+}
+
+
+
 cluster_ACN <- function(dat,iterations,local_adj_thresh,global_adj_thresh,p_close_local,p_close_global,TCN,TCN_se){
   # let the CN estimates converge locally if below the specified local threshold
   dat[,"TCN"] <- dat[,TCN] #segmentCN_pre12
-  dat[,"TCN_se"] <- dat[,TCN_se] #segmentCN_pre12
+  #dat[,"TCN_se"] <- dat[,TCN_se] #segmentCN_pre12
   dat[,"length"] <- dat[,"tcnNbrOfLoci"]
-  dat <- dat[complete.cases(dat$TCN)&complete.cases(dat$TCN_se),]
+  #dat <- dat[complete.cases(dat$TCN)&complete.cases(dat$TCN_se),]
+  dat <- dat[complete.cases(dat$TCN) & complete.cases(dat$length)& complete.cases(dat$chromosome),]
   for (i in 2:nrow(dat)){
     if (abs(dat[i,"TCN"]-dat[i-1,"TCN"])<local_adj_thresh & dat[i-1,"chromosome"] == dat[i,"chromosome"]){
-      t = (dat[i,"TCN"]-dat[i-1,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^0.5
-      df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^2)^2/
-              ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
-               (dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^2*(dat[i,"length"]-1))
-      p <- 2*pt(-abs(t),df=df)
-      p <- max(p,p_close_local)
-
+      # t = (dat[i,"TCN"]-dat[i-1,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^0.5
+      # df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^2)^2/
+      #         ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
+      #          (dat[i-1,"TCN_se"]^2/dat[i-1,"length"])^2*(dat[i,"length"]-1))
+      # p <- 2*pt(-abs(t),df=df)
+      # print(p)
+      # p <- max(p,2*p_close_local)/2
+      # print(p)
       # rather than use the t-distribution here, assign probabilities based upon the ECDF of the differences between segments. Augment this ECDF with unobserved true changes.
 
+      p <- p_close_local
 
       mean_TCN <- (dat[i,"TCN"]*dat[i,"length"]+dat[i-1,"TCN"]*dat[i-1,"length"])/(dat[i,"length"]+dat[i-1,"length"])
+      stopifnot(abs(dat[i-1,"TCN"] - mean_TCN) < local_adj_thresh & abs(dat[i,"TCN"] - mean_TCN) < local_adj_thresh)
       dat[i-1,"TCN"] <- mean_TCN*p + dat[i-1,"TCN"]*(1-p)
       dat[i,"TCN"] <- mean_TCN*p + dat[i,"TCN"]*(1-p)
+
     }
   }
 
   for(i in 3:nrow(dat)){
     if (abs(dat[i,"TCN"]-dat[i-2,"TCN"])<local_adj_thresh & dat[i-2,"chromosome"] == dat[i,"chromosome"]){
-
-      t = (dat[i,"TCN"]-dat[i-2,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^0.5
-      df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2)^2/
-        ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
-           (dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2*(dat[i,"length"]-1))
-      p <- 2*pt(-abs(t),df=df)
-
       mean_TCN <- (dat[i,"TCN"]*dat[i,"length"]+dat[i-2,"TCN"]*dat[i-2,"length"])/(dat[i,"length"]+dat[i-2,"length"])
 
-      t = (dat[i,"TCN"]-dat[i-2,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^0.5
-      df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2)^2/
-        ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
-           (dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2*(dat[i,"length"]-1))
-      p <- 2*pt(-abs(t),df=df)
-      p <- max(p,p_close_local)
+      # t = (dat[i,"TCN"]-dat[i-2,"TCN"])/(dat[i,"TCN_se"]^2/dat[i,"length"]+dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^0.5
+      # df = ((dat[i,"TCN_se"]^2/dat[i,"length"])^2+(dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2)^2/
+      #   ((dat[i,"TCN_se"]^2/dat[i,"length"])^2*(dat[i,"length"]-1)+
+      #      (dat[i-2,"TCN_se"]^2/dat[i-2,"length"])^2*(dat[i,"length"]-1))
+      # p <- 2*pt(-abs(t),df=df)
+      # p <- max(p,p_close_local)
+      p <- p_close_local
+      stopifnot(abs(dat[i-2,"TCN"] - mean_TCN) < local_adj_thresh & abs(dat[i,"TCN"] - mean_TCN) < local_adj_thresh)
 
       dat[i-2,"TCN"] <- mean_TCN*p + dat[i-2,"TCN"]*(1-p)
       dat[i,"TCN"] <- mean_TCN*p + dat[i,"TCN"]*(1-p)    }
   }
 
-  hc <- hclust(dist(dat$TCN),method="complete")                # apply hirarchical clustering
-  #plot(hc)
-  #rect.hclust(hc, h=global_adj_thresh, border="red")
-  dat$memb <- cutree(hc, h=global_adj_thresh)
+  if(global_adj_thresh > 0){
+    hc <- hclust(dist(dat$TCN),method="complete")                # apply hirarchical clustering
+    #plot(hc)
+    #rect.hclust(hc, h=global_adj_thresh, border="red")
+    dat$memb <- cutree(hc, h=global_adj_thresh)
 
-  for(i in 1:max(dat$memb)){
-    temp <- dat[which(dat$memb == i),]
-    mean_TCN <- sum(temp$TCN*temp$length)/sum(temp$length)
-    dat[which(dat$memb == i),"TCN"] <- p_close_global*mean_TCN + (1-p_close_global)*dat[which(dat$memb == i),"TCN"]
+    for(i in 1:max(dat$memb)){
+      temp <- dat[which(dat$memb == i),]
+      mean_TCN <- sum(temp$TCN*temp$length)/sum(temp$length)
+      stopifnot(abs(dat[which(dat$memb == i),"TCN"] - mean_TCN) < global_adj_thresh)
+      dat[which(dat$memb == i),"TCN"] <- p_close_global*mean_TCN + (1-p_close_global)*dat[which(dat$memb == i),"TCN"]
+    }
   }
 
+  dat[,TCN] <- dat$TCN
   if(iterations > 1){
-    iterations <- iterations -1
-    dat[,TCN] <- dat$TCN
-    return(cluster_ACN(dat,iterations,local_adj_thresh,global_adj_thresh,p_close_local,p_close_global,TCN))
+    return(cluster_ACN(dat,iterations -1,local_adj_thresh,global_adj_thresh,p_close_local,p_close_global,TCN))
   } else if(iterations == 1){
-    dat[,TCN] <- dat$TCN
     return(dat)
   }
 }
@@ -231,9 +386,9 @@ do_some_seg <- function(data,round,seg_name="CT"){
   segments$locationstart <- as.numeric(segments$chromosome)+as.numeric(segments$tcnStart)/max_pos
   data$location <- as.numeric(data$Chr)+as.numeric(data$Position)/max_pos
   data$segment <- cut(x=as.numeric(data$location),breaks=as.numeric(segments$locationstart),labels=FALSE)
-  data[,paste("resegmentCT_PSCBS",as.character(round),sep="")] <- segments[data$segment,"tcnMean"]
+  data[,paste("resegmentCN_PSCBS",as.character(round),sep="")] <- segments[data$segment,"tcnMean"]
 
-  segments[,paste("segmentCN_pre",round,sep="")] <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),paste("resegmentCT_PSCBS",as.character(round),sep="")],na.rm=TRUE))
+  segments[,paste("segmentCN_pre",round,sep="")] <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),paste("resegmentCN_PSCBS",as.character(round),sep="")],na.rm=TRUE))
   data[,paste("segmentCN_pre",round,sep="")] <- segments[data$segment,paste("segmentCN_pre",round,sep="")]
 
   # make some plots:
@@ -302,26 +457,32 @@ renormalise <- function(data,segments,pr){
   data$homs <- data$Allele1...Design == data$Allele2...Design
 
   # calculate relationships to segment value and their inverses:
-  gred <- lm(formula=reddye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye > data$greendye),])
-  ggreen <- lm(formula= greendye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye < data$greendye),])
-  gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),])
-  ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),])
+  # gred <- lm(formula=reddye~0+CNseg,data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreen <- lm(formula= greendye~0+CNseg,data=data[which(data$homs & data$reddye < data$greendye),])
+  gredinv <- lm(formula=CNseg~0+reddye,data=data[which(data$homs & data$reddye > data$greendye),])
+  ggreeninv <- lm(formula=CNseg~0+greendye,data=data[which(data$homs & data$reddye < data$greendye),])
+
+  # gred <- lm(formula=reddye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreen <- lm(formula= greendye~0+CNseg + I(CNseg^3),data=data[which(data$homs & data$reddye < data$greendye),])
+  # gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),])
 
   # plot(gred)
   # plot(ggreen)
   # plot(gredinv)
   # plot(ggreeninv)
-  summary(gred)
-  summary(ggreen)
+  # summary(gred)
+  # summary(ggreen)
   summary(gredinv)
   summary(ggreeninv)
 
   new_green = data.frame(data$greendye)
   colnames(new_green) <- "greendye"
-  new_green <- predict(ggreeninv,newdata=new_green)
-  new_green <- data.frame(new_green)
-  colnames(new_green) <- "CNseg"
-  data$newgreen <- (data$greendye+predict(gred,newdata=new_green))/2
+  # new_green2 <- predict(ggreeninv,newdata=new_green)
+  # new_green2 <- data.frame(new_green2)
+  # colnames(new_green2) <- "CNseg"
+  # data$newgreen <- (data$greendye+predict(gred,newdata=new_green2))/2
+  data$newgreen <- predict(ggreeninv,newdata=new_green)
 
   # it looks like the gams are overfitting and just simply assigning whatever fucking value that they want.
   # use polynomials instead.
@@ -329,29 +490,26 @@ renormalise <- function(data,segments,pr){
 
   new_red = data.frame(data$reddye)
   colnames(new_red) <- "reddye"
-  new_red <- predict(gredinv,newdata=new_red)
-  new_red <- data.frame(new_red)
-  colnames(new_red) <- "CNseg"
-  data$newred <- (data$reddye+predict(ggreen,newdata=new_red))/2
-
-  # data$newred <- sapply(data$newred,function(x) max(0,x))
-  # data$newgreen <- sapply(data$newgreen,function(x) max(0,x))
-
-  # sd(data$newred,na.rm=TRUE)
-  # sd(data$newgreen,na.rm=TRUE)
-  # sd(data$reddye,na.rm=TRUE)
-  # sd(data$greendye,na.rm=TRUE)
-  # mean(data$newred,na.rm=TRUE)
-  # mean(data$newgreen,na.rm=TRUE)
-  # mean(data$reddye,na.rm=TRUE)
-  # mean(data$greendye,na.rm=TRUE)
+  # new_red2 <- predict(gredinv,newdata=new_red)
+  # new_red2 <- data.frame(new_red2)
+  # colnames(new_red2) <- "CNseg"
+  data$newred <- predict(gredinv,newdata=new_red)
 
   data$newbaf <- data$newgreen/(data$newred+data$newgreen)
-  sd(data$B.Allele.Freq,na.rm=TRUE)
-  sd(data$newbaf,na.rm=TRUE)
-  ggplot()+geom_histogram(aes(data[which(data$homs),"newbaf"]),binwidth=0.01)
-  ggplot()+geom_histogram(aes(data[which(!data$homs),"newbaf"]),binwidth=0.01)
-  ggplot()+geom_histogram(aes(data[which(!data$homs),"B.Allele.Freq"]),binwidth=0.01)
+
+  ggplot(data)+geom_segment(aes(x=reddye,y=greendye,xend=newred,yend=newgreen),alpha=0.01)+xlim(0,5)+ylim(0,5)
+
+  # fit a single guassian on the middle values - this will tell you how to correct for baf at high levels.
+  # allow for abberant data - use the uniform prior.
+
+
+  #ggplot(data)+geom_segment(aes(x=reddye,y=greendye,xend=new_red2,yend=new_green2),alpha=0.01)+xlim(0,5)+ylim(0,5)
+
+  # sd(data$B.Allele.Freq,na.rm=TRUE)
+  # sd(data$newbaf,na.rm=TRUE)
+  # ggplot()+geom_histogram(aes(data[which(data$homs),"newbaf"]),binwidth=0.01)
+  # ggplot()+geom_histogram(aes(data[which(!data$homs),"newbaf"]),binwidth=0.01)
+  # ggplot()+geom_histogram(aes(data[which(!data$homs),"B.Allele.Freq"]),binwidth=0.01)
 
   # median(data[which(data$homs & data$newred < data$newgreen),"newred"])
   # median(data[which(data$homs & data$newred > data$newgreen),"newgreen"])
@@ -364,36 +522,49 @@ renormalise <- function(data,segments,pr){
   data[which(data$newbaf > med_baf),"newbaf2"] <- 1-0.5*(1-data[which(data$newbaf > med_baf),"newbaf"])/(1-med_baf)
 
   data$CNsnp <- data$newgreen +data$newred
-  data$reddye <- data$CNsnp*data$newbaf2
-  data$greendye <- data$CNsnp*(1-data$newbaf2)
+  data$reddye3 <- data$CNsnp*(1-data$newbaf2)
+  data$greendye3 <- data$CNsnp*data$newbaf2
   data$baf <- data$newbaf2
+  ggplot(data)+geom_segment(aes(x=reddye,y=greendye,xend=reddye3,yend=greendye3),alpha=0.01)+xlim(0,5)+ylim(0,5)
+
+  data$reddye <- data$reddye3
+  data$greendye <- data$greendye3
 
   # ggplot()+geom_histogram(aes(data[which(data$homs),"newbaf2"]),binwidth=0.01)
   # ggplot()+geom_histogram(aes(data[which(!data$homs),"newbaf2"]),binwidth=0.01)
 
   # should now do correction of homs to non homs in total copy number in the same way we just did red to non red!
-  ghom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(data$homs),])
-  gnonhom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(!data$homs),])
-  ghominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(data$homs),])
-  gnonhominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(!data$homs),])
+  # ghom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(data$homs),])
+  # gnonhom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(!data$homs),])
+  ghominv <- lm(CNseg~0+CNsnp,data=data[which(data$homs),])
+  gnonhominv <- lm(CNseg~0+CNsnp,data=data[which(!data$homs),])
+
+  # ghom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(data$homs),])
+  # gnonhom <- lm(CNsnp~0+CNseg+I(CNseg^3),data=data[which(!data$homs),])
+  # ghominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(data$homs),])
+  # gnonhominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(!data$homs),])
 
   # summary(ghom)
   # summary(gnonhom)
-  # summary(ghominv)
+  summary(ghominv)
+  summary(gnonhominv)
+
+
   data$CNsnp2 <- data$CNsnp
   new_hom = data.frame(data[which(data$homs),"CNsnp"])
   colnames(new_hom) <- "CNsnp"
-  new_hom <- predict(ghominv,newdata=new_hom)
-  new_hom <- data.frame(new_hom)
-  colnames(new_hom) <- "CNseg"
-  data[which(data$homs),"CNsnp2"] <- (data[which(data$homs),"CNsnp"] + predict(gnonhom,newdata=new_hom))/2
+  data[which(data$homs),"CNsnp2"] <- predict(ghominv,newdata=new_hom)
+  # new_hom2 <- data.frame(new_hom2)
+  # colnames(new_hom2) <- "CNseg"
+  # data[which(data$homs),"CNsnp2"] <- (data[which(data$homs),"CNsnp"] + predict(gnonhom,newdata=new_hom2))/2
 
   new_nonhom = data.frame(data[which(!data$homs),"CNsnp"])
   colnames(new_nonhom) <- "CNsnp"
-  new_nonhom <- predict(gnonhominv,newdata=new_nonhom)
-  new_nonhom <- data.frame(new_nonhom)
-  colnames(new_nonhom) <- "CNseg"
-  data[which(!data$homs),"CNsnp2"] <- (data[which(!data$homs),"CNsnp"] + predict(ghom,newdata=new_nonhom))/2
+  data[which(!data$homs),"CNsnp2"] <- predict(gnonhominv,newdata=new_nonhom)
+  # new_nonhom2 <- predict(gnonhominv,newdata=new_nonhom)
+  # new_nonhom2 <- data.frame(new_nonhom2)
+  # colnames(new_nonhom2) <- "CNseg"
+  # data[which(!data$homs),"CNsnp2"] <- (data[which(!data$homs),"CNsnp"] + predict(ghom,newdata=new_nonhom2))/2
   data$CNsnp <- data$CNsnp2
 
   data$CNsnp <- data$CNsnp*2/median(data$CNsnp,na.rm=TRUE)
@@ -410,6 +581,13 @@ renormalise <- function(data,segments,pr){
   return(list(data=data,segments=segments))
 }
 
+get_TCN_track_precision <- function(mat,seg_est_name){
+  g <- ggplot(mat) +
+    geom_segment(aes_string(x = "tcnStart", y = seg_est_name, xend = "tcnEnd", yend = seg_est_name),size=2)+
+    facet_grid(.~chromosome,scales = "free_x", space = "free")
+  return(g)
+}
+
 reformat <- function(data,segments){
   data = data[which(data$Chr != 0),]
 
@@ -419,7 +597,7 @@ reformat <- function(data,segments){
   segments$locationstart <- as.numeric(segments$chromosome)+as.numeric(segments$tcnStart)/max_pos
 
   data$segment <- cut(x=as.numeric(data$location),breaks=as.numeric(segments$locationstart),labels=FALSE)
-  data$segmentCT_PSCBS <- segments[data$segment,"tcnMean"]
+  data$segmentCN_PSCBS <- segments[data$segment,"tcnMean"]
 
   return(data)
 }
