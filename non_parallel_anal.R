@@ -43,7 +43,8 @@ temp_seg <- segments
 
 data <- temp_data
 segments <- temp_seg
-# segments <- segments[,colnames(segments)[-(17:26)]]
+data[!complete.cases(data$CT),]
+data <- data[complete.cases(data$CT),]
 
 segr <- 1
 pr <- 0
@@ -54,10 +55,37 @@ segments <- get_new_seg_estimates(data=data,segments=segments,
 data <- put_seg_estimates_into_data_array(data=data,segments=segments,
                                           segment_name = paste("segmentCN_pre",as.character(pr),sep=""),
                                           new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
+segments[,"length"] <- segments[,"tcnNbrOfLoci"]
+segments$TCN <- segments[,paste("segmentCN_pre",as.character(pr),sep="")]
+segments[!(complete.cases(segments$TCN) & complete.cases(segments$length) & complete.cases(segments$chromosome)),]
+
+local_adj_thresh = min(max(0.005*pr,0.02),0.06)
+global_adj_thresh = max(local_adj_thresh -0.03,0)
+segments <- cluster_ACN2(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
+                         global_adj_thresh=global_adj_thresh,p_close_local = 0.5,p_close_global=0.5,
+                         TCN=paste("segmentCN_pre",as.character(pr),sep=""),
+                         TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep=""))
+data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+                                          segment_name = "TCN",
+                                          new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
+segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
+
+g2 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
+g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
+# g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
+grid.arrange(g2,g3)
+
+interesting <- which(abs(segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] - segments[,paste("segmentCN_pre",as.character(pr),sep="")]) >local_adj_thresh)
+segments[sort(c(interesting,interesting+1,interesting-1)),]
+# after we finish the clustering algorithm we should actually move the snps as otherwise the other things will fit this arbritrary change in segment values?
+
+
 pr
 
 SEG_ROUNDS = 4
 PR_ROUNDS = 4
+setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
+source(paste(getwd(),"/utils.R",sep=""))
 while(segr < SEG_ROUNDS){
   while(pr < PR_ROUNDS*segr){
     pr <- pr + 1
@@ -66,7 +94,7 @@ while(segr < SEG_ROUNDS){
     data <- result$data
     segments <- result$segments
     print("gam started")
-    gam <- gam(CNsnp/CNseg ~ 0+s(GC50) + s(GC150) + s(GC500) + s(GC2500) + s(CNseg), data=data)
+    gam <- gam(CNsnp/CNseg ~ 0 + s(GC50) + s(GC150) + s(GC500) + s(GC2500), data=data)
     print("gam_done")
     if(!is.null(gam$na.action)){
       data <- data[-gam$na.action,]
@@ -81,26 +109,42 @@ while(segr < SEG_ROUNDS){
                                       new_snp_name = paste("CN_pre",as.character(pr),sep=""),
                                       new_seg_name = paste("segmentCN_pre",as.character(pr),sep=""))
     data <- put_seg_estimates_into_data_array(data=data,segments=segments,
-              segment_name = paste("segmentCN_pre",as.character(pr),sep=""),
-              new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
+                                              segment_name = paste("segmentCN_pre",as.character(pr),sep=""),
+                                              new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
+    # data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+    #           segment_name = paste("segmentCN_pre",as.character(pr),sep=""),
+    #           new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
 
     local_adj_thresh = min(max(0.005*pr,0.02),0.06)
     global_adj_thresh = max(local_adj_thresh -0.03,0)
-    segments <- cluster_ACN(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
+    segments <- cluster_ACN2(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
                             global_adj_thresh=global_adj_thresh,p_close_local = 0.5,p_close_global=0.5,
                             TCN=paste("segmentCN_pre",as.character(pr),sep=""),
                             TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep=""))
+    data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+                                              segment_name = "TCN",
+                                              new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
+    segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
+    # dat=segments
+    # iterations=30
+    # local_adj_thresh=local_adj_thresh
+    # global_adj_thresh=global_adj_thresh
+    # p_close_local = 0.5
+    # p_close_global=0.5
+    # TCN=paste("segmentCN_pre",as.character(pr),sep="")
+    # TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep="")
 
     g1 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr-1),sep="")) + ylim(0,5)
     g2 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
-    g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_nogam",as.character(pr),sep="")) + ylim(0,5)
+    g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
+    g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre_nogam",as.character(pr),sep="")) + ylim(0,5)
     # g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
-    grid.arrange(g1,g2,g3)
+    grid.arrange(g1,g2,g3,g4)
   }
   segr <- segr+1
   old_segments[[segr]] <- segments
   pr <- pr + 1
-  result <- do_some_seg(data,pr,paste("CN_pre",as.character(pr-1),sep=""))
+  result <- do_some_seg(data,pr,paste("CN_pre_clustered",as.character(pr-1),sep=""))
   segments <- result$segments
   fit <- result$fit
   data <- result$data
