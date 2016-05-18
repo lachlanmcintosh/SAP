@@ -9,8 +9,10 @@ renormalise2 <- function(data,segments,pr){
 
   # gredinv <- gam(formula=CNseg~0+s(reddye),data=data[which(data$homs & data$reddye > data$greendye),])
   # ggreeninv <- gam(formula=CNseg~0+s(greendye),data=data[which(data$homs & data$reddye < data$greendye),])
-  gredinv <- lm(formula=CNseg~0+reddye,data=data[which(data$homs & data$reddye > data$greendye),])
-  ggreeninv <- lm(formula=CNseg~0+greendye,data=data[which(data$homs & data$reddye < data$greendye),])
+  # gredinv <- lm(formula=CNseg~0+reddye,data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreeninv <- lm(formula=CNseg~0+greendye,data=data[which(data$homs & data$reddye < data$greendye),])
+  gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),])
 
   new_green = data.frame(data$greendye)
   colnames(new_green) <- "greendye"
@@ -34,8 +36,12 @@ renormalise2 <- function(data,segments,pr){
   data$greendye <- data$CNsnp*data$newbaf2
   data$baf <- data$newbaf2
 
-  ghominv <- lm(CNseg~0+CNsnp,data=data[which(data$homs),])
-  gnonhominv <- lm(CNseg~0+CNsnp,data=data[which(!data$homs),])
+  # ghominv <- lm(CNseg~0+CNsnp,data=data[which(data$homs),])
+  # gnonhominv <- lm(CNseg~0+CNsnp,data=data[which(!data$homs),])
+  ghominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(data$homs),])
+  gnonhominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(!data$homs),])
+  # ghominv <- gam(CNseg~0+s(CNsnp),data=data[which(data$homs),])
+  # gnonhominv <- gam(CNseg~0+s(CNsnp),data=data[which(!data$homs),])
 #
 #   summary(ghominv)
 #   summary(gnonhominv)
@@ -187,9 +193,14 @@ merge_data_with_GC <- function(data,GC){
 }
 
 get_GC_file <- function(){
-  folder ="/home/users/allstaff/lmcintosh/ITH/SNP_stuff/data/"
+  folder ="/home/users/allstaff/lmcintosh/ITH/SNP_stuff/data/INTERVALS/"
   GC_filenames <- lapply(1:50*50,function(x) paste(folder,"intervals_",as.character(x),".out",sep=""))
-  pGC <- lapply(GC_filenames, read_GC_file) # parallel was slower for loading files.
+  pGC <- list()
+  for(i in seq_along(GC_filenames)){
+    print(GC_filenames[[i]])
+    pGC[[i]] <- read_GC_file(GC_filenames[[i]])
+  }
+  #pGC <- lapply(GC_filenames, read_GC_file) # parallel was slower for loading files.
 
   for (i in seq_along(pGC)) {
     setnames(pGC[[i]],c("chr","start","end","pAT","pGC","A","C","G","T","N","O","length"))
@@ -549,16 +560,14 @@ get_TCN_track_precision <- function(mat,seg_est_name){
 
 reformat <- function(data,segments){
   data = data[which(data$Chr != 0),]
-
   #Find which segment each thing belongs to
   max_pos = max(as.numeric(data$Position))+1
   data$location <- as.numeric(data$Chr)+as.numeric(data$Position)/max_pos
   segments$locationstart <- as.numeric(segments$chromosome)+as.numeric(segments$tcnStart)/max_pos
-
+  segments$seg_name <- 1:nrow(segments)
   data$segment <- cut(x=as.numeric(data$location),breaks=as.numeric(segments$locationstart),labels=FALSE)
   data$segmentCN_PSCBS <- segments[data$segment,"tcnMean"]
-
-  return(data)
+  return(list(data=data,segments=segments))
 }
 
 get_merged_data <- function(data,GC){
@@ -594,6 +603,9 @@ get_new_snp_estimates2 <- function(gam,data,new_snp_name,old_segment_name){
 }
 
 get_new_seg_estimates <- function(data,segments,new_snp_name,new_seg_name){
+  result <- reformat(data,segments)
+  segments <- result$segments
+  data <- result$data
   segments[,new_seg_name] <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),new_snp_name],na.rm=TRUE))
   segments[,paste(new_seg_name,"_stderr",sep="")] <- sapply(1:nrow(segments),function(x) sd(data[which(data$segment == x),new_snp_name],na.rm=TRUE))
   return(segments)
@@ -607,6 +619,10 @@ get_TCN_track <- function(mat,seg_est_name){
 }
 
 put_seg_estimates_into_data_array <- function(data,segments,segment_name,new_snp_name){
+  result <- reformat(data,segments)
+  segments <- result$segments
+  data <- result$data
+
   data[,new_snp_name] <- segments[data$segment,segment_name]
   return(data)
 }
@@ -2594,6 +2610,25 @@ read_GC_score_file <- function(filename,max_pos){
   return(as.data.frame(dt))
 }
 
+# read_GC_score_file <- function(filename,max_pos){
+#   dt <- read.table(filename,header=TRUE,sep=",")
+#   # dt <- as.data.table(fread(filename, sep="\t", sep2="auto", nrows=-1L, header=TRUE, na.strings="NA",
+#   #                           stringsAsFactors=FALSE, verbose=getOption("datatable.verbose"), autostart=1L,
+#   #                           skip=0, select=NULL, drop=NULL, colClasses=NULL,
+#   #                           integer64=getOption("datatable.integer64"),         # default: "integer64"
+#   #                           #dec=if (sep!=".") "." else ",", col.names,
+#   #                           #check.names=FALSE, encoding="unknown", strip.white=TRUE,
+#   #                           showProgress=TRUE, #getOption("datatable.showProgress"),   # default: TRUE
+#   #                           data.table=TRUE))
+#   setnames(dt,colnames(dt),c("chr","base","GC"))
+#   dt$chr <- gsub("chr","",dt$chr)
+#   dt$chr <- gsub("X","23",dt$chr)
+#   #data$location <- as.numeric(data$Chr)+as.numeric(data$Position)/max_pos
+#   dt$location <- as.numeric(dt$chr)+as.numeric(dt$base)/max_pos
+#   #data$segment <- findInterval(data$location, segments$locationstart)
+#   return(as.data.frame(dt))
+# }
+
 read_illumina_annotation_file <- function(filename,max_pos){
   dt <- as.data.table(fread(filename, sep=",", sep2="auto", nrows=-1L, header=TRUE, na.strings="NA",
                             stringsAsFactors=FALSE, verbose=getOption("datatable.verbose"), autostart=1L,
@@ -2607,6 +2642,7 @@ read_illumina_annotation_file <- function(filename,max_pos){
 }
 
 read_GC_file <- function(filename,max_pos){
+  # dt <- read.table(filename,header=TRUE,sep=",")
   dt <- as.data.table(fread(filename, sep="auto", sep2="auto", nrows=-1L, header=FALSE, na.strings="NA",
                             stringsAsFactors=FALSE, verbose=getOption("datatable.verbose"), autostart=1L,
                             skip=1, select=NULL, drop=NULL, colClasses=NULL,

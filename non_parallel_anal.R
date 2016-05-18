@@ -28,7 +28,9 @@ data <- preprocess_raw_data(data)
 result <- do_some_seg(data,0)
 data <- result$data
 segments <- result$segments
-data <-  reformat(data,segments)
+result <-  reformat(data,segments)
+data <- result$data
+segments <- result$segments
 
 #### find het SNPs if the SNPs are not annotated ####
 # not required for the illumina data
@@ -43,8 +45,9 @@ temp_seg <- segments
 
 data <- temp_data
 segments <- temp_seg
-data[!complete.cases(data$CT),]
-data <- data[complete.cases(data$CT),]
+# segments$seg_name <- rownames(segments)
+# data[!complete.cases(data$CT),]
+# data <- data[complete.cases(data$CT),]
 
 segr <- 1
 pr <- 0
@@ -57,7 +60,11 @@ data <- put_seg_estimates_into_data_array(data=data,segments=segments,
                                           new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
 segments[,"length"] <- segments[,"tcnNbrOfLoci"]
 segments$TCN <- segments[,paste("segmentCN_pre",as.character(pr),sep="")]
-segments[!(complete.cases(segments$TCN) & complete.cases(segments$length) & complete.cases(segments$chromosome)),]
+# interesting <- which(!(complete.cases(segments$TCN) & complete.cases(segments$length) & complete.cases(segments$chromosome)))
+# segments[sort(c(interesting+1,interesting,interesting-1)),]
+# data[which(data$segment == 152),]
+
+
 
 local_adj_thresh = min(max(0.005*pr,0.02),0.06)
 global_adj_thresh = max(local_adj_thresh -0.03,0)
@@ -75,8 +82,8 @@ g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.charac
 # g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
 grid.arrange(g2,g3)
 
-interesting <- which(abs(segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] - segments[,paste("segmentCN_pre",as.character(pr),sep="")]) >local_adj_thresh)
-segments[sort(c(interesting,interesting+1,interesting-1)),]
+# interesting <- which(abs(segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] - segments[,paste("segmentCN_pre",as.character(pr),sep="")]) >local_adj_thresh)
+# segments[sort(c(interesting,interesting+1,interesting-1)),]
 # after we finish the clustering algorithm we should actually move the snps as otherwise the other things will fit this arbritrary change in segment values?
 
 
@@ -94,7 +101,7 @@ while(segr < SEG_ROUNDS){
     data <- result$data
     segments <- result$segments
     print("gam started")
-    gam <- gam(CNsnp/CNseg ~ 0 + s(GC50) + s(GC150) + s(GC500) + s(GC2500), data=data)
+    gam <- gam(CNsnp/CNseg ~ 0 + te(GC50) + te(GC150) + te(GC500) + te(GC2500) + te(GC500,CNseg), data=data)
     print("gam_done")
     if(!is.null(gam$na.action)){
       data <- data[-gam$na.action,]
@@ -134,9 +141,15 @@ while(segr < SEG_ROUNDS){
     # TCN=paste("segmentCN_pre",as.character(pr),sep="")
     # TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep="")
 
+    # resterech all the values back out again
+    # what ever was the median should stay the median
+    # what ever was the 95% percentile should likewise stay the 95% percentile
+    quantile(data[,paste("segmentCN_pre",as.character(pr-1),sep="")],c(0.5,0.9))
+    quantile(data[,paste("segmentCN_pre",as.character(pr-1),sep="")],c(0.5,0.9))
+
     g1 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr-1),sep="")) + ylim(0,5)
     g2 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
-    g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
+    g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr-1),sep="")) + ylim(0,5)
     g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre_nogam",as.character(pr),sep="")) + ylim(0,5)
     # g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
     grid.arrange(g1,g2,g3,g4)
