@@ -101,7 +101,7 @@ while(segr < SEG_ROUNDS){
     data <- result$data
     segments <- result$segments
     print("gam started")
-    gam <- gam(CNsnp/CNseg ~ 0 + te(GC50) + te(GC150) + te(GC500) + te(GC2500) + te(GC500,CNseg), data=data)
+    gam <- gam(CNsnp/CNseg ~ 0 + te(GC50) + te(GC150) + te(GC500) + te(GC2500)+te(GC500,CNseg), data=data)
     print("gam_done")
     if(!is.null(gam$na.action)){
       data <- data[-gam$na.action,]
@@ -118,12 +118,9 @@ while(segr < SEG_ROUNDS){
     data <- put_seg_estimates_into_data_array(data=data,segments=segments,
                                               segment_name = paste("segmentCN_pre",as.character(pr),sep=""),
                                               new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
-    # data <- put_seg_estimates_into_data_array(data=data,segments=segments,
-    #           segment_name = paste("segmentCN_pre",as.character(pr),sep=""),
-    #           new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
 
-    local_adj_thresh = min(max(0.005*pr,0.02),0.06)
-    global_adj_thresh = max(local_adj_thresh -0.03,0)
+    local_adj_thresh = min(max(0.1*pr,0.02),0.12)
+    global_adj_thresh = max(local_adj_thresh -0.03,0)/3
     segments <- cluster_ACN2(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
                             global_adj_thresh=global_adj_thresh,p_close_local = 0.5,p_close_global=0.5,
                             TCN=paste("segmentCN_pre",as.character(pr),sep=""),
@@ -132,18 +129,7 @@ while(segr < SEG_ROUNDS){
                                               segment_name = "TCN",
                                               new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
     segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
-    # dat=segments
-    # iterations=30
-    # local_adj_thresh=local_adj_thresh
-    # global_adj_thresh=global_adj_thresh
-    # p_close_local = 0.5
-    # p_close_global=0.5
-    # TCN=paste("segmentCN_pre",as.character(pr),sep="")
-    # TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep="")
 
-    # resterech all the values back out again
-    # what ever was the median should stay the median
-    # what ever was the 95% percentile should likewise stay the 95% percentile
     quantile(data[,paste("segmentCN_pre",as.character(pr-1),sep="")],c(0.5,0.9))
     quantile(data[,paste("segmentCN_pre",as.character(pr-1),sep="")],c(0.5,0.9))
 
@@ -157,7 +143,7 @@ while(segr < SEG_ROUNDS){
   segr <- segr+1
   old_segments[[segr]] <- segments
   pr <- pr + 1
-  result <- do_some_seg(data,pr,paste("CN_pre_clustered",as.character(pr-1),sep=""))
+  result <- do_some_seg(data,pr,paste("segmentCN_pre_clustered",as.character(pr-1),sep=""))
   segments <- result$segments
   fit <- result$fit
   data <- result$data
@@ -167,7 +153,42 @@ while(segr < SEG_ROUNDS){
   data <- put_seg_estimates_into_data_array(data=data,segments=segments,
                                             segment_name = paste("segmentCN_pre",as.character(pr),sep=""),
                                             new_snp_name = paste("segmentCN_pre",as.character(pr),sep=""))
+  local_adj_thresh = min(max(0.1*pr,0.02),0.12)
+  global_adj_thresh = max(local_adj_thresh -0.03,0)/3
+  segments <- cluster_ACN2(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
+                           global_adj_thresh=global_adj_thresh,p_close_local = 0.5,p_close_global=0.5,
+                           TCN=paste("segmentCN_pre",as.character(pr),sep=""),
+                           TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep=""))
+  data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+                                            segment_name = "TCN",
+                                            new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
+  segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
 }
+# if we put in there that data values shrink toward their segment values we might just get it perfect.
+# but leave it for now.
+# i can't think what the implications of that would be.
+
+
+# head(GC)
+
+local_adj_thresh = 0.12
+global_adj_thresh = 0.04
+segments <- cluster_ACN2(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
+                         global_adj_thresh=global_adj_thresh,p_close_local = 0.5,p_close_global=0.5,
+                         TCN=paste("segmentCN_pre",as.character(pr),sep=""),
+                         TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep=""))
+data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+                                          segment_name = "TCN",
+                                          new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
+segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
+
+get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
+get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
+
+# i notice that the start or end of chromosomes are often up - is there a way to check if this is biological or real?
+
+
+
 
 
 # sample <- 1

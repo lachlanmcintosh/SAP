@@ -1,6 +1,7 @@
 renormalise2 <- function(data,segments,pr){
   # start with the original data:
   data$CNsnp <- data$CT
+  # data$CNsnp <- data$CNsnp*2/mean(data$CNsnp)
   data$CNseg <- data[,paste("segmentCN_pre_clustered",as.character(pr-1),sep="")]
 
   data$reddye <- data$CNsnp*data$B.Allele.Freq
@@ -11,8 +12,25 @@ renormalise2 <- function(data,segments,pr){
   # ggreeninv <- gam(formula=CNseg~0+s(greendye),data=data[which(data$homs & data$reddye < data$greendye),])
   # gredinv <- lm(formula=CNseg~0+reddye,data=data[which(data$homs & data$reddye > data$greendye),])
   # ggreeninv <- lm(formula=CNseg~0+greendye,data=data[which(data$homs & data$reddye < data$greendye),])
-  gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),])
-  ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),])
+  # gredinv <- lm(formula=CNseg~0+reddye+I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreeninv <- lm(formula=CNseg~0+greendye+I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),])
+  # gredinv <- lm(formula=CNseg~0+reddye,data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreeninv <- lm(formula=CNseg~0+greendye,data=data[which(data$homs & data$reddye < data$greendye),])
+  # K = 8
+  # gredinv <- gam(formula=CNseg~s(reddye,bs="tp",k=K),data=data[which(data$homs & data$reddye > data$greendye),])
+  # ggreeninv <- gam(formula=CNseg~s(greendye,bs="tp",k=K),data=data[which(data$homs & data$reddye < data$greendye),])
+  #
+  # K=3
+  data$weight <- 0.01+sapply(abs(data$CNseg-median(data$CNseg,na.rm=TRUE)),function(x) min(x,2))^2
+  data$weight <- data$weight/sum(data$weight,na.rm=TRUE)
+  gredinv <- lm(formula=CNseg~0+reddye + I(reddye^3),data=data[which(data$homs & data$reddye > data$greendye),],weights =weight)
+  ggreeninv <- lm(formula=CNseg~0+greendye + I(greendye^3),data=data[which(data$homs & data$reddye < data$greendye),],weights = weight)
+  #
+  # gredinv <- gam(formula=CNseg~s(reddye,k=K),data=data[which(data$homs & data$reddye > data$greendye),],weights =weight)
+  # ggreeninv <- gam(formula=CNseg~s(greendye,k=K),data=data[which(data$homs & data$reddye < data$greendye),],weights = weight)
+
+  summary(gredinv)
+  summary(ggreeninv)
 
   new_green = data.frame(data$greendye)
   colnames(new_green) <- "greendye"
@@ -38,8 +56,13 @@ renormalise2 <- function(data,segments,pr){
 
   # ghominv <- lm(CNseg~0+CNsnp,data=data[which(data$homs),])
   # gnonhominv <- lm(CNseg~0+CNsnp,data=data[which(!data$homs),])
-  ghominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(data$homs),])
-  gnonhominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(!data$homs),])
+  # ghominv <- gam(CNseg~s(CNsnp,bs="tp",k=K),data=data[which(data$homs),])
+  # gnonhominv <- gam(CNseg~s(CNsnp,k=K),bs="tp",data=data[which(!data$homs),])
+  ghominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(data$homs),],weights=weight)
+  gnonhominv <- lm(CNseg~0+CNsnp+I(CNsnp^3),data=data[which(!data$homs),],weights=weight)
+
+  # ghominv <- gam(CNseg~s(CNsnp,k=K),data=data[which(data$homs),],weights=weight)
+  # gnonhominv <- gam(CNseg~s(CNsnp,k=K),data=data[which(!data$homs),],weights=weight)
   # ghominv <- gam(CNseg~0+s(CNsnp),data=data[which(data$homs),])
   # gnonhominv <- gam(CNseg~0+s(CNsnp),data=data[which(!data$homs),])
 #
@@ -2642,15 +2665,15 @@ read_illumina_annotation_file <- function(filename,max_pos){
 }
 
 read_GC_file <- function(filename,max_pos){
-  # dt <- read.table(filename,header=TRUE,sep=",")
-  dt <- as.data.table(fread(filename, sep="auto", sep2="auto", nrows=-1L, header=FALSE, na.strings="NA",
-                            stringsAsFactors=FALSE, verbose=getOption("datatable.verbose"), autostart=1L,
-                            skip=1, select=NULL, drop=NULL, colClasses=NULL,
-                            integer64=getOption("datatable.integer64"),         # default: "integer64"
-                            #dec=if (sep!=".") "." else ",", col.names,
-                            #check.names=FALSE, encoding="unknown", strip.white=TRUE,
-                            showProgress=TRUE, #getOption("datatable.showProgress"),   # default: TRUE
-                            data.table=TRUE))
+  dt <- read.table(filename,header=TRUE,sep=",")
+  # dt <- as.data.table(fread(filename, sep="auto", sep2="auto", nrows=-1L, header=FALSE, na.strings="NA",
+  #                           stringsAsFactors=FALSE, verbose=getOption("datatable.verbose"), autostart=1L,
+  #                           skip=1, select=NULL, drop=NULL, colClasses=NULL,
+  #                           integer64=getOption("datatable.integer64"),         # default: "integer64"
+  #                           #dec=if (sep!=".") "." else ",", col.names,
+  #                           #check.names=FALSE, encoding="unknown", strip.white=TRUE,
+  #                           showProgress=TRUE, #getOption("datatable.showProgress"),   # default: TRUE
+  #                           data.table=TRUE))
   return(as.data.frame(dt))
 }
 
