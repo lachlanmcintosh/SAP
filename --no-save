@@ -1,0 +1,80 @@
+
+R version 3.2.4 Patched (2016-03-10 r70325) -- "Very Secure Dishes"
+Copyright (C) 2016 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> #############################
+> ##### SNP array package #####
+> #############################
+> # Author: Lachlan McIntosh  #
+> rm(list=ls())
+> library(ggplot2)
+> library(PSCBS)
+PSCBS v0.61.0 (2016-02-03) successfully loaded. See ?PSCBS for help.
+
+Attaching package: ‘PSCBS’
+
+The following objects are masked from ‘package:base’:
+
+    append, load
+
+> library(data.table)
+> library(mgcv)
+Loading required package: nlme
+This is mgcv 1.8-12. For overview type 'help("mgcv-package")'.
+> library(cluster)
+> library(gridExtra)
+> 
+> 
+> #### unpaired test dataset: SAMPLE 13 ####
+> # args=(commandArgs(trailingOnly = TRUE))
+> 
+> args=(commandArgs(TRUE))
+> ##args is now a list of character vectors
+> ## First check to see if arguments are passed.
+> ## Then cycle through each element of the list and evaluate the expressions.
+> if(length(args)==0){
++   print("No arguments supplied.")
++   ##supply default values
++   a = 1
++   b = c(1,1,1)
++ }else{
++   for(i in 1:length(args)){
++     eval(parse(text=args[[i]]))
++   }
++ }
+[1] "No arguments supplied."
+> 
+> 
+> 
+> 
+> #sample <-  as.character(args[1])
+> # sample <- 1
+> # PARENT_FOLDER = paste("/home/users/allstaff/lmcintosh/P2_LEON/ILO2.58-8359/","ascat_",as.character(sample),"/",sep="")
+> # filename = paste(PARENT_FOLDER,"/raw_data.txt",sep="")
+> # filename = commandArgs(trailingOnly=T)[1]
+> 
+> # load functions
+> setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
+> source(paste(getwd(),"/utils.R",sep=""))
+> #source("/wehisan/home/allstaff/l/lmcintosh/SAP/utils.R")
+> 
+> data <- read_raw_illumina_file(filename)
+Error in fread(filename, sep = "\t", sep2 = "auto", nrows = -1L, header = TRUE,  : 
+  object 'filename' not found
+Calls: read_raw_illumina_file -> as.data.table -> fread
+Execution halted

@@ -12,12 +12,37 @@ library(gridExtra)
 
 
 #### unpaired test dataset: SAMPLE 13 ####
+# args=(commandArgs(trailingOnly = TRUE))
+
 args=(commandArgs(TRUE))
+##args is now a list of character vectors
+## First check to see if arguments are passed.
+## Then cycle through each element of the list and evaluate the expressions.
+if(length(args)==0){
+  print("No arguments supplied.")
+  ##supply default values
+  a = 1
+  b = c(1,1,1)
+}else{
+  for(i in 1:length(args)){
+    eval(parse(text=args[[i]]))
+  }
+}
+
 #sample <-  as.character(args[1])
-sample <- 1
-PARENT_FOLDER = paste("/home/users/allstaff/lmcintosh/P2_LEON/ILO2.58-8359/","ascat_",as.character(sample),"/",sep="")
-filename = paste(PARENT_FOLDER,"/raw_data.txt",sep="")
+# sample <- 1
+# PARENT_FOLDER = paste("/home/users/allstaff/lmcintosh/P2_LEON/ILO2.58-8359/","ascat_",as.character(sample),"/",sep="")
+# filename = paste(PARENT_FOLDER,"/raw_data.txt",sep="")
+# filename = commandArgs(trailingOnly=T)[1]
+
+# filename="/export/share/prkfs2/shared/bioinf-data/Papenfuss_lab/projects/melanoma/SNP_arrays/data/raw/ILO2.58-6865/ILO2_58-6865/ILO2_58-6865_FinalReport1.txt"
+
 # load functions
+
+
+
+
+#µ filename="/wehisan/home/allstaff/l/lmcintosh/run_pres/ILO2.58-7453/ascat_6/raw_data.txt"
 setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
 source(paste(getwd(),"/utils.R",sep=""))
 #source("/wehisan/home/allstaff/l/lmcintosh/SAP/utils.R")
@@ -77,10 +102,10 @@ data <- put_seg_estimates_into_data_array(data=data,segments=segments,
                                           new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
 segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
 
-g2 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
-g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
-# g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
-grid.arrange(g2,g3)
+# g2 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
+# g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
+# # g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
+# grid.arrange(g2,g3)
 
 # interesting <- which(abs(segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] - segments[,paste("segmentCN_pre",as.character(pr),sep="")]) >local_adj_thresh)
 # segments[sort(c(interesting,interesting+1,interesting-1)),]
@@ -133,12 +158,12 @@ while(segr < SEG_ROUNDS){
     quantile(data[,paste("segmentCN_pre",as.character(pr-1),sep="")],c(0.5,0.9))
     quantile(data[,paste("segmentCN_pre",as.character(pr-1),sep="")],c(0.5,0.9))
 
-    g1 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr-1),sep="")) + ylim(0,5)
-    g2 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
-    g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr-1),sep="")) + ylim(0,5)
-    g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre_nogam",as.character(pr),sep="")) + ylim(0,5)
-    # g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
-    grid.arrange(g1,g2,g3,g4)
+    # g1 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr-1),sep="")) + ylim(0,5)
+    # g2 <- get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
+    # g3 <- get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr-1),sep="")) + ylim(0,5)
+    # g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre_nogam",as.character(pr),sep="")) + ylim(0,5)
+    # # g4 <- get_TCN_track_precision(segments,paste("segmentCN_pre","0",sep="")) + ylim(0,5)
+    # grid.arrange(g1,g2,g3,g4)
   }
   segr <- segr+1
   old_segments[[segr]] <- segments
@@ -164,26 +189,37 @@ while(segr < SEG_ROUNDS){
                                             new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
   segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
 }
+
+saveRDS(segments, file=paste(filename,".segmented",sep=""))
+
+# to load these later use:
+# bar <- readRDS(file="data.Rda")
+
+# now we want to save old_segments
+
+
+
+
 # if we put in there that data values shrink toward their segment values we might just get it perfect.
 # but leave it for now.
 # i can't think what the implications of that would be.
 
 
 # head(GC)
-
-local_adj_thresh = 0.12
-global_adj_thresh = 0.04
-segments <- cluster_ACN2(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
-                         global_adj_thresh=global_adj_thresh,p_close_local = 0.5,p_close_global=0.5,
-                         TCN=paste("segmentCN_pre",as.character(pr),sep=""),
-                         TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep=""))
-data <- put_seg_estimates_into_data_array(data=data,segments=segments,
-                                          segment_name = "TCN",
-                                          new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
-segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
-
-get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
-get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
+#
+# local_adj_thresh = 0.12
+# global_adj_thresh = 0.04
+# segments <- cluster_ACN2(dat=segments,iterations=30,local_adj_thresh=local_adj_thresh,
+#                          global_adj_thresh=global_adj_thresh,p_close_local = 0.5,p_close_global=0.5,
+#                          TCN=paste("segmentCN_pre",as.character(pr),sep=""),
+#                          TCN_se=paste("segmentCN_pre",as.character(pr),"_stderr",sep=""))
+# data <- put_seg_estimates_into_data_array(data=data,segments=segments,
+#                                           segment_name = "TCN",
+#                                           new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
+# segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
+#
+# get_TCN_track_precision(segments,paste("segmentCN_pre_clustered",as.character(pr),sep="")) + ylim(0,5)
+# get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep="")) + ylim(0,5)
 
 # i notice that the start or end of chromosomes are often up - is there a way to check if this is biological or real?
 
@@ -195,19 +231,19 @@ get_TCN_track_precision(segments,paste("segmentCN_pre",as.character(pr),sep=""))
 # PARENT_FOLDER = paste("/home/users/allstaff/lmcintosh/P2_LEON/ILO2.58-8359/","ascat_",as.character(sample),"/",sep="")PARENT_FOLDER
 # load(paste(PARENT_FOLDER,"data.Rda",sep=""))
 # load(paste(PARENT_FOLDER,"segments.Rda",sep=""))
-for(round in 0:pr){
-  name <- as.character(round)
-  if(pr%%PR_ROUNDS == 0) {
-    segments <- get_new_seg_estimates(data=data,segments=segments,
-      new_snp_name = paste("segmentCN_pre",name,sep=""),
-      new_seg_name = paste("segmentCN_pre",name,sep=""))
-  }else{
-    segments <- get_new_seg_estimates(data=data,segments=segments,
-      new_snp_name = paste("CT_pre",name,sep=""),
-      new_seg_name = paste("segmentCN_pre",name,sep=""))
-  }
-  print(name)
-}
+# for(round in 0:pr){
+#   name <- as.character(round)
+#   if(pr%%PR_ROUNDS == 0) {
+#     segments <- get_new_seg_estimates(data=data,segments=segments,
+#       new_snp_name = paste("segmentCN_pre",name,sep=""),
+#       new_seg_name = paste("segmentCN_pre",name,sep=""))
+#   }else{
+#     segments <- get_new_seg_estimates(data=data,segments=segments,
+#       new_snp_name = paste("CT_pre",name,sep=""),
+#       new_seg_name = paste("segmentCN_pre",name,sep=""))
+#   }
+#   print(name)
+# }
 
 # g1 <- get_TCN_track_precision(old_segments[[1]],"segmentCN_pre0") + ylim(0,4)
 # g2 <- get_TCN_track_precision(segments,"segmentCN_pre9") + ylim(0,4)
@@ -221,85 +257,59 @@ for(round in 0:pr){
 # grid.arrange(g1,g2,g3,g4)
 
 
-# do a saftey look on everything:
-g1 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre0")+ylim(0,4)
-g2 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre1")+ylim(0,4)
-g3 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre2")+ylim(0,4)
-g4 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre3")+ylim(0,4)
-g5 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre4")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4,g5)
-
-g1 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre5")+ylim(0,4)
-g2 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre6")+ylim(0,4)
-g3 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre7")+ylim(0,4)
-g4 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre8")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4)
-
-g1 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre9")+ylim(0,4)
-g2 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre10")+ylim(0,4)
-g3 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre11")+ylim(0,4)
-g4 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre12")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4)
-
-g1 <-get_TCN_track_precision(segments,"segmentCN_pre13")+ylim(0,4)
-g2 <-get_TCN_track_precision(segments,"segmentCN_pre14")+ylim(0,4)
-g3 <-get_TCN_track_precision(segments,"segmentCN_pre15")+ylim(0,4)
-g4 <-get_TCN_track_precision(segments,"segmentCN_pre16")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4)
-
-
-# in terms of the bias inference, forget it,
-# in terms of allelic balance, forget it,
-# just do soem stuff
-
-# tidyness code
-for(pr in 1:16){
-  name <- as.character(pr)
-  if(pr%%4 == 0) {
-    segments <- get_new_seg_estimates(data=data,segments=segments,
-                                      new_snp_name = paste("segmentCN_pre",name,sep=""),
-                                      new_seg_name = paste("segmentCN_pre",name,sep=""))
-  }else{
-    segments <- get_new_seg_estimates(data=data,segments=segments,
-                                      new_snp_name = paste("CN_pre",name,sep=""),
-                                      new_seg_name = paste("segmentCN_pre",name,sep=""))
-  }
-}
-
-> for(pr in 1:16){
-  +   name <- as.character(pr)
-  +   if(pr%%4 == 0) {
-    +     segments <- get_new_seg_estimates(data=data,segments=segments,
-                                            +                                       new_snp_name = paste("segmentCN_pre",name,sep=""),
-                                            +                                       new_seg_name = paste("segmentCN_pre",name,sep=""))
-    +   }else{
-      +   segments <- get_new_seg_estimates(data=data,segments=segments,
-                                            +                                     new_snp_name = paste("CN_pre",name,sep=""),
-                                            +                                     new_seg_name = paste("segmentCN_pre",name,sep=""))
-      +   }
-  +   print(pr)
-  + }
-
-g1 <-get_TCN_track(segments,"segmentCN_pre1")+ylim(0,4)
-g2 <-get_TCN_track(segments,"segmentCN_pre2")+ylim(0,4)
-g3 <-get_TCN_track(segments,"segmentCN_pre3")+ylim(0,4)
-g4 <-get_TCN_track(segments,"segmentCN_pre4")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4)
-
-g1 <-get_TCN_track(segments,"segmentCN_pre5")+ylim(0,4)
-g2 <-get_TCN_track(segments,"segmentCN_pre6")+ylim(0,4)
-g3 <-get_TCN_track(segments,"segmentCN_pre7")+ylim(0,4)
-g4 <-get_TCN_track(segments,"segmentCN_pre8")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4)
-
-g1 <-get_TCN_track(segments,"segmentCN_pre9")+ylim(0,4)
-g2 <-get_TCN_track(segments,"segmentCN_pre10")+ylim(0,4)
-g3 <-get_TCN_track(segments,"segmentCN_pre11")+ylim(0,4)
-g4 <-get_TCN_track(segments,"segmentCN_pre12")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4)
-
-g1 <-get_TCN_track(segments,"segmentCN_pre13")+ylim(0,4)
-g2 <-get_TCN_track(segments,"segmentCN_pre14")+ylim(0,4)
-g3 <-get_TCN_track(segments,"segmentCN_pre15")+ylim(0,4)
-g4 <-get_TCN_track(segments,"segmentCN_pre16")+ylim(0,4)
-grid.arrange(g1,g2,g3,g4)
+# # do a saftey look on everything:
+# g1 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre0")+ylim(0,4)
+# g2 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre1")+ylim(0,4)
+# g3 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre2")+ylim(0,4)
+# g4 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre3")+ylim(0,4)
+# g5 <-get_TCN_track_precision(old_segments[[2]],"segmentCN_pre4")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4,g5)
+#
+# g1 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre5")+ylim(0,4)
+# g2 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre6")+ylim(0,4)
+# g3 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre7")+ylim(0,4)
+# g4 <-get_TCN_track_precision(old_segments[[3]],"segmentCN_pre8")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4)
+#
+# g1 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre9")+ylim(0,4)
+# g2 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre10")+ylim(0,4)
+# g3 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre11")+ylim(0,4)
+# g4 <-get_TCN_track_precision(old_segments[[4]],"segmentCN_pre12")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4)
+#
+# g1 <-get_TCN_track_precision(segments,"segmentCN_pre13")+ylim(0,4)
+# g2 <-get_TCN_track_precision(segments,"segmentCN_pre14")+ylim(0,4)
+# g3 <-get_TCN_track_precision(segments,"segmentCN_pre15")+ylim(0,4)
+# g4 <-get_TCN_track_precision(segments,"segmentCN_pre16")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4)
+#
+#
+# # in terms of the bias inference, forget it,
+# # in terms of allelic balance, forget it,
+# # just do soem stuff
+#
+# # tidyness code
+#
+# g1 <-get_TCN_track(segments,"segmentCN_pre1")+ylim(0,4)
+# g2 <-get_TCN_track(segments,"segmentCN_pre2")+ylim(0,4)
+# g3 <-get_TCN_track(segments,"segmentCN_pre3")+ylim(0,4)
+# g4 <-get_TCN_track(segments,"segmentCN_pre4")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4)
+#
+# g1 <-get_TCN_track(segments,"segmentCN_pre5")+ylim(0,4)
+# g2 <-get_TCN_track(segments,"segmentCN_pre6")+ylim(0,4)
+# g3 <-get_TCN_track(segments,"segmentCN_pre7")+ylim(0,4)
+# g4 <-get_TCN_track(segments,"segmentCN_pre8")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4)
+#
+# g1 <-get_TCN_track(segments,"segmentCN_pre9")+ylim(0,4)
+# g2 <-get_TCN_track(segments,"segmentCN_pre10")+ylim(0,4)
+# g3 <-get_TCN_track(segments,"segmentCN_pre11")+ylim(0,4)
+# g4 <-get_TCN_track(segments,"segmentCN_pre12")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4)
+#
+# g1 <-get_TCN_track(segments,"segmentCN_pre13")+ylim(0,4)
+# g2 <-get_TCN_track(segments,"segmentCN_pre14")+ylim(0,4)
+# g3 <-get_TCN_track(segments,"segmentCN_pre15")+ylim(0,4)
+# g4 <-get_TCN_track(segments,"segmentCN_pre16")+ylim(0,4)
+# grid.arrange(g1,g2,g3,g4)

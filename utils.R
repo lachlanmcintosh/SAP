@@ -217,25 +217,25 @@ merge_data_with_GC <- function(data,GC){
 
 get_GC_file <- function(){
   folder ="/home/users/allstaff/lmcintosh/ITH/SNP_stuff/data/INTERVALS/"
-  GC_filenames <- lapply(1:50*50,function(x) paste(folder,"intervals_",as.character(x),".out",sep=""))
+  GC_filenames <- lapply(c(1,3,10,50)*50,function(x) paste(folder,"intervals_",as.character(x),".out",sep=""))
   pGC <- list()
-  for(i in seq_along(GC_filenames)){
+  for(i in 1:length(GC_filenames)){
     print(GC_filenames[[i]])
     pGC[[i]] <- read_GC_file(GC_filenames[[i]])
   }
   #pGC <- lapply(GC_filenames, read_GC_file) # parallel was slower for loading files.
 
-  for (i in seq_along(pGC)) {
+  for(i in 1:length(GC_filenames)){
     setnames(pGC[[i]],c("chr","start","end","pAT","pGC","A","C","G","T","N","O","length"))
     pGC[[i]]$pos <- i*25+pGC[[i]]$start
-    pGC[[i]]$loc <- as.numeric(pGC[[i]]$chr)+as.numeric(pGC[[i]]$pos)/max(pGC[[i]]$pos)
+    pGC[[i]]$loc <- as.numeric(pGC[[i]]$chr)+as.numeric(pGC[[i]]$pos)/max(pGC[[i]]$pos,na.rm=TRUE)
   }
   GC <- pGC[[1]]
   GC$Position <- GC$start + GC$length/2
   GC[,"GC50"] <- GC$pGC
-  for(i in 2:50){
-    GC[,paste("GC",as.character(50*i),sep="")] <- pGC[[i]]$pGC
-  }
+  GC[,paste("GC",as.character(50*3),sep="")] <- pGC[[2]]$pGC
+  GC[,paste("GC",as.character(50*10),sep="")] <- pGC[[3]]$pGC
+  GC[,paste("GC",as.character(50*50),sep="")] <- pGC[[4]]$pGC
   GC$name <- paste(as.character(GC[,c("chr")]),as.character(GC[,c("Position")]),sep=" ")
   rm(pGC)
   return(GC)
@@ -2665,15 +2665,15 @@ read_illumina_annotation_file <- function(filename,max_pos){
 }
 
 read_GC_file <- function(filename,max_pos){
-  dt <- read.table(filename,header=TRUE,sep=",")
-  # dt <- as.data.table(fread(filename, sep="auto", sep2="auto", nrows=-1L, header=FALSE, na.strings="NA",
-  #                           stringsAsFactors=FALSE, verbose=getOption("datatable.verbose"), autostart=1L,
-  #                           skip=1, select=NULL, drop=NULL, colClasses=NULL,
-  #                           integer64=getOption("datatable.integer64"),         # default: "integer64"
-  #                           #dec=if (sep!=".") "." else ",", col.names,
-  #                           #check.names=FALSE, encoding="unknown", strip.white=TRUE,
-  #                           showProgress=TRUE, #getOption("datatable.showProgress"),   # default: TRUE
-  #                           data.table=TRUE))
+  # dt <- read.table(filename,header=TRUE,sep=",")
+  dt <- as.data.table(fread(filename, sep="auto", sep2="auto", nrows=-1L, header=FALSE, na.strings="NA",
+                            stringsAsFactors=FALSE, verbose=getOption("datatable.verbose"), autostart=1L,
+                            skip=1, select=NULL, drop=NULL, colClasses=NULL,
+                            integer64=getOption("datatable.integer64"),         # default: "integer64"
+                            #dec=if (sep!=".") "." else ",", col.names,
+                            #check.names=FALSE, encoding="unknown", strip.white=TRUE,
+                            showProgress=TRUE, #getOption("datatable.showProgress"),   # default: TRUE
+                            data.table=TRUE))
   return(as.data.frame(dt))
 }
 
