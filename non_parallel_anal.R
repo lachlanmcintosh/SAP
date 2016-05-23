@@ -42,7 +42,7 @@ if(length(args)==0){
 
 
 
-#µ filename="/wehisan/home/allstaff/l/lmcintosh/run_pres/ILO2.58-7453/ascat_6/raw_data.txt"
+# filename="/wehisan/home/allstaff/l/lmcintosh/run_pres/ILO2.58-7453/ascat_6/raw_data.txt"
 setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
 source(paste(getwd(),"/utils.R",sep=""))
 #source("/wehisan/home/allstaff/l/lmcintosh/SAP/utils.R")
