@@ -47,8 +47,9 @@ setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
 source(paste(getwd(),"/utils.R",sep=""))
 #source("/wehisan/home/allstaff/l/lmcintosh/SAP/utils.R")
 
+#="./ILO2.58-6865/ascat_10/raw_data.txt"
 BASE = "/home/users/allstaff/lmcintosh/run_pres"
-filename <- paste(BASE,filename,sep="")
+filename <- paste(BASE,substring(filename,2),sep="")
 data <- read_raw_illumina_file(filename)
 data <- preprocess_raw_data(data)
 
