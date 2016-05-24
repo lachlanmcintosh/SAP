@@ -1,6 +1,5 @@
-
 rm(list=ls())
-require(data.table) # useful for comparing intervals
+require(data.table)
 library(ggplot2)
 library(dplyr)
 library(gridExtra)
@@ -8,6 +7,7 @@ library(manipulate)
 library(cluster)
 library(igraph)
 library(knitr)
+
 # the metadata
 metadata3=read.table("/home/users/allstaff/lmcintosh/P2_LEON/clare-vincent/metadata/clonal_SNP_aggregated_textwrangeler.txt",sep="\t",header=TRUE)
 metadata3$Server.Location <- gsub("O2_",'O2.',gsub(".txt","/",gsub("(_FinalReport)", "/ascat_", metadata3$Report.data.filename, perl=TRUE),perl=TRUE),perl=TRUE)
@@ -29,7 +29,8 @@ for(i in 1:nrow(metadata3)){
   if(metadata3[i,"Segmented.File.Exists"]){
     datalist[[i]] <-readRDS(file=paste(BASE,metadata3[i,"Server.Location"],"raw_data.txt.segmented" ,sep=""))
     datalist[[i]]$chr <- factor(datalist[[i]]$chr, levels=c(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,'X','Y'))
-    datalist[[i]]$TCN <- datalist[[i]]$segmentCN_pre_clustered13
+    datalist[[i]]$TCN <- datalist[[i]]$tcnMean
+    datalist[[i]]$TCN_new <- datalist[[i]]$segmentCN_pre_clustered13
     datalist[[i]]$start <- datalist[[i]]$tcnStart
     datalist[[i]]$end <- datalist[[i]]$tcnEnd
 
@@ -42,6 +43,12 @@ names(datalist) <- metadata3$Sample.ID
 setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
 source(paste(getwd(),"/utils.R",sep=""))
 centromeres <- load_centromeres()
+
+i<- i+1
+print_pair(i)
+
+
+
 
 metadata3$diff25 <- rep(NA,nrow(metadata3))
 metadata3$diff10 <- rep(NA,nrow(metadata3))
@@ -62,19 +69,11 @@ for(i in 1:nrow(metadata3)){
   }
 }
 
-#levels(metadata3$Patient.tumor.kind) <- c("primary","secondary")
-
-PUT PDX.GENERATION IN HERE
+#PUT PDX.GENERATION IN HERE
 ggplot(data=metadata3[which(metadata3$Patient.ID =="M1310"),],aes(x=Patient.tumor.kind,y=diff10,position="jitter",label=Patient.ID,col=Patient.ID))+geom_text(position = position_dodge(.5))
 ggplot(data=metadata3,aes(x=Patient.tumor.kind,y=diff25,position="jitter",label=Patient.ID,col=Patient.ID))+geom_text(position = position_dodge(.5))
-```
 
-# FOR THE GRANT PROPOSAL!
-```{r}
-#metadata3 <- metadata3[which(metadata3$Patient.ID == "M1310"),]
-#metadata3$diff25 <- rep(NA,nrow(metadata3))
-#metadata3$num_segments <- rep(NA,nrow(metadata3))
-#metadata3$num_novel_segment_boundaries <- rep(NA,nrow(metadata3))
+
 metadata3$proportion_diff <- metadata3$num_segs_s1 <- metadata3$num_segs_s2 <- metadata3$change_in_num_segs <- metadata3$boths <- metadata3$starts <- metadata3$ends <- rep(NA,nrow(metadata3))
 for(i in which(metadata3$Patient.ID == "M1310")){
   if(!metadata3[i,"is_root"] && metadata3[i,"Corrected.File.Exists"] && metadata3[metadata3[i,"Parent.Row"],"Corrected.File.Exists"]){
@@ -100,7 +99,7 @@ get_grid_plot <- function(dat2,MIN_LENGTH){
 #
 # head(datalist[[99]])
 
-get_grid_plot(datalist[[97]],0)
+get_grid_plot(datalist[[1]],0)
 get_grid_plot(datalist[[98]],0)
 get_grid_plot(datalist[[99]],10)
 get_grid_plot(datalist[[100]],10)

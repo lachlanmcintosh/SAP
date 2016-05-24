@@ -47,6 +47,8 @@ setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
 source(paste(getwd(),"/utils.R",sep=""))
 #source("/wehisan/home/allstaff/l/lmcintosh/SAP/utils.R")
 
+BASE = "/home/users/allstaff/lmcintosh/run_pres"
+filename <- paste(BASE,filename,sep="")
 data <- read_raw_illumina_file(filename)
 data <- preprocess_raw_data(data)
 
@@ -118,7 +120,7 @@ SEG_ROUNDS = 4
 PR_ROUNDS = 4
 setwd("/wehisan/home/allstaff/l/lmcintosh/SAP")
 source(paste(getwd(),"/utils.R",sep=""))
-while(segr < SEG_ROUNDS){
+try(while(segr < SEG_ROUNDS){
   while(pr < PR_ROUNDS*segr){
     pr <- pr + 1
     print(pr)
@@ -188,7 +190,22 @@ while(segr < SEG_ROUNDS){
                                             segment_name = "TCN",
                                             new_snp_name = paste("segmentCN_pre_clustered",as.character(pr),sep=""))
   segments[,paste("segmentCN_pre_clustered",as.character(pr),sep="")] <- segments$TCN
+})
+
+for(round in 0:pr){
+  name <- as.character(round)
+  if(pr%%PR_ROUNDS == 0) {
+    segments <- get_new_seg_estimates(data=data,segments=segments,
+      new_snp_name = paste("segmentCN_pre",name,sep=""),
+      new_seg_name = paste("segmentCN_pre",name,sep=""))
+  }else{
+    segments <- get_new_seg_estimates(data=data,segments=segments,
+      new_snp_name = paste("CT_pre",name,sep=""),
+      new_seg_name = paste("segmentCN_pre",name,sep=""))
+  }
+  print(name)
 }
+
 
 saveRDS(segments, file=paste(filename,".segmented",sep=""))
 
@@ -227,23 +244,7 @@ saveRDS(segments, file=paste(filename,".segmented",sep=""))
 
 
 
-# sample <- 1
-# PARENT_FOLDER = paste("/home/users/allstaff/lmcintosh/P2_LEON/ILO2.58-8359/","ascat_",as.character(sample),"/",sep="")PARENT_FOLDER
-# load(paste(PARENT_FOLDER,"data.Rda",sep=""))
-# load(paste(PARENT_FOLDER,"segments.Rda",sep=""))
-# for(round in 0:pr){
-#   name <- as.character(round)
-#   if(pr%%PR_ROUNDS == 0) {
-#     segments <- get_new_seg_estimates(data=data,segments=segments,
-#       new_snp_name = paste("segmentCN_pre",name,sep=""),
-#       new_seg_name = paste("segmentCN_pre",name,sep=""))
-#   }else{
-#     segments <- get_new_seg_estimates(data=data,segments=segments,
-#       new_snp_name = paste("CT_pre",name,sep=""),
-#       new_seg_name = paste("segmentCN_pre",name,sep=""))
-#   }
-#   print(name)
-# }
+
 
 # g1 <- get_TCN_track_precision(old_segments[[1]],"segmentCN_pre0") + ylim(0,4)
 # g2 <- get_TCN_track_precision(segments,"segmentCN_pre9") + ylim(0,4)

@@ -1,4 +1,3 @@
-
 similarities_in_boundaries <- function(s1,s2,which_values = "both",max_dist,min_length){
   ors <- starts <- ends <- boths <- 0
   for(i in 1:nrow(s1)){
@@ -171,10 +170,10 @@ get_dual_TCN_track_seperated <- function(datalist,sample1,sample2,thresh,segdiff
   s2 <- s2[which(s2$end - s2$start > min_length),]
 
   a <- abs_diff_in_approx_num_segments <- abs(nrow(s2) - nrow(s1))
-  boths <- similarities_in_boundaries(s1,s2,"both",segdiff,min_length)
-  starts <- similarities_in_boundaries(s1,s2,"start",segdiff,min_length)
-  ends <- similarities_in_boundaries(s1,s2,"end",segdiff,min_length)
-  ors <- similarities_in_boundaries(s1,s2,"or",segdiff,min_length)
+  # boths <- similarities_in_boundaries(s1,s2,"both",segdiff,min_length)
+  # starts <- similarities_in_boundaries(s1,s2,"start",segdiff,min_length)
+  # ends <- similarities_in_boundaries(s1,s2,"end",segdiff,min_length)
+  # ors <- similarities_in_boundaries(s1,s2,"or",segdiff,min_length)
 
   # calculate the maximum average copy number for plotting
   majormax <- 4
@@ -196,7 +195,7 @@ get_dual_TCN_track_seperated <- function(datalist,sample1,sample2,thresh,segdiff
     print(g2)
 
   }
-  return(list(proportion_diff=proportion_diff, num_segs_s1 = nrow(s1), num_segs_s2 = nrow(s2), change_in_num_segs = nrow(s1)-nrow(s2), boths=boths, starts = starts, ends= ends, ors = ors))
+  return(list(proportion_diff=proportion_diff, num_segs_s1 = nrow(s1), num_segs_s2 = nrow(s2), change_in_num_segs = nrow(s1)-nrow(s2))) #, boths=boths, starts = starts, ends= ends, ors = ors))
 }
 
 
@@ -834,13 +833,6 @@ get_new_seg_estimates <- function(data,segments,new_snp_name,new_seg_name){
   segments[,new_seg_name] <- sapply(1:nrow(segments),function(x) mean(data[which(data$segment == x),new_snp_name],na.rm=TRUE))
   segments[,paste(new_seg_name,"_stderr",sep="")] <- sapply(1:nrow(segments),function(x) sd(data[which(data$segment == x),new_snp_name],na.rm=TRUE))
   return(segments)
-}
-
-get_TCN_track <- function(mat,seg_est_name){
-  g <- ggplot(mat) +
-    geom_segment(aes_string(x = "tcnStart", y = seg_est_name, xend = "tcnEnd", yend = seg_est_name),size=2)+
-    facet_grid(.~chromosome,scales = "free_x", space = "free")
-  return(g)
 }
 
 put_seg_estimates_into_data_array <- function(data,segments,segment_name,new_snp_name){
@@ -1585,8 +1577,12 @@ get_CN_track_grid <- function(qat){
   return(g)
 }
 
-get_TCN_track <- function(mat){
-  mat$total <- mat$major + mat$minor
+get_TCN_track <- function(mat,seg_name ="TCN"){
+  if("major" %in% colnames(mat)){
+    mat$total <- mat$major + mat$minor
+  } else{
+    mat$total <- mat[,seg_name]
+  }
   g <- ggplot(mat) +
     geom_segment(aes_string(x = "start", y = "total", xend = "end", yend = "total",col="chr"),size=2)+
     geom_vline(data=centromeres,aes(xintercept=x,col=chr))+
@@ -1596,6 +1592,10 @@ get_TCN_track <- function(mat){
     scale_y_continuous(breaks=number_ticks(20))+
     ylab("TCN")+ggtitle("TCN track")
   return(g)
+}
+
+print_pair <- function(i){
+  grid.arrange(get_TCN_track(datalist[[i]],"TCN"),get_TCN_track(datalist[[i]],"TCN_new"))
 }
 
 # get_grid_plot plots the data as a grid plot...
